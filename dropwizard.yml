@@ -1,0 +1,27 @@
+server:
+  applicationConnectors:
+  - type: http
+    port: 9000
+  adminConnectors:
+  - type: http
+    port: 9001
+
+# Logging settings.
+logging:
+
+    # The default level of all loggers. Can be OFF, ERROR, WARN, INFO, DEBUG, TRACE, or ALL.
+    level: INFO
+
+    # Logger-specific levels.
+    loggers:
+        be.ida: WARN
+
+    appenders:
+        - type: console
+          logFormat: "%d{dd-MM-yyyy HH:mm:ss} *%p* [%t] %logger | %msg %n"
+        - type: file
+          currentLogFilename: /tmp/log/dropwizard.log
+          archivedLogFilenamePattern: /tmp/log/dropwizard-%d{yyyy-MM-dd}.log
+          logFormat: "%d{dd-MM-yyyy HH:mm:ss} *%p* [%t] %logger | %msg %n"
+          archivedFileCount: 7
+          timeZone: UTC
