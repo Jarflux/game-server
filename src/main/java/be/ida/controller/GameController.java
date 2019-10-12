@@ -16,7 +16,7 @@ import java.util.Date;
  */
 
 @Controller
-@RequestMapping(value = "/game")
+@RequestMapping(value = "/app")
 public class GameController {
 
     @MessageMapping("/chat")
