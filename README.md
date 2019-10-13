@@ -1,4 +1,4 @@
-# Dropwizard game server hackathon.
+# Dropwizard game client hackathon.
 
-# Start server command
-java -jar target/game-server-0.1.jar server dropwizard.yml
+# Start client command
+java -jar target/game-client-0.1.jar client dropwizard.yml
