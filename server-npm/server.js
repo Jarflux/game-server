@@ -540,8 +540,6 @@ function ContinueBetting() {
         }
     });
 
-    console.log()
-
     if (continueBetting) {
         return true;
     }
@@ -565,19 +563,19 @@ function NextStepInTheGame() {
     console.log("Next step in the game");
 
     if (CommunityCards.length == 0) {
-        console.log("Community cards from 0 to 3");
+        console.log("FLOP");
         ProvideCommunityCards(3);
         CurrentPlayerForThisRound = 0;
         ResetActionForAllPlayers();
         AskNextPlayerToBet();
     } else if (CommunityCards.length == 3) {
-        console.log("Community cards from 3 to 4");
+        console.log("TURN");
         ProvideCommunityCards(1);
         CurrentPlayerForThisRound = 0;
         ResetActionForAllPlayers();
         AskNextPlayerToBet();
     } else if (CommunityCards.length == 4) {
-        console.log("Community cards from 4 to 5");
+        console.log("RIVER");
         ProvideCommunityCards(1);
         CurrentPlayerForThisRound = 0;
         ResetActionForAllPlayers();
