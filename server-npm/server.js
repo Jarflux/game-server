@@ -99,7 +99,7 @@ wsServer.on('request', function(request) {
                     player.name = message.data;
                     player.join(true);
                     //TODO validation + max 6 people + only known bots
-                    console.log(player.name + " joined the game!");
+                    console.log("Player joined the game: ", player.getIdentity());
                     BroadcastPlayersList();
                     break;
 
@@ -133,34 +133,42 @@ wsServer.on('request', function(request) {
                     break;
 
                 case 'new_round':
-                    //TODO: start looping every player
                     MoveSmallBindToNextPlayer();
-                    GetSmallBlind().setBet(5);
-                    GetBigBlind().setBet(10);
+                    PlayersForThisRound = GetPlayersStartingWithSmallBlind();
 
+                    console.log("ROUND PLAYERS: ", PlayersForThisRound.length);
+
+                    PlayersForThisRound[0].setBet(5);
+                    PlayersForThisRound[1].setBet(10);
+                    CurrentPlayerForThisRound = 2;
                     BroadcastGameState();
+
+                    //give card to all players
 
                     ProvideOneCardToAllPlayers();
                     BroadcastGameState();
 
+                    //give card to all players
                     ProvideOneCardToAllPlayers();
                     BroadcastGameState();
 
-                    //TODO: loop all players and ask for input.
-                    //TODO: the first player to loop is the person after the bigBlind
-
-                    //TODO: now provide the 3 community cards
-                    // CommunityCards
-                    BroadcastGameState();
-
-                    //TODO; another bet round
-
-                    //Inform the game has started
+                    //loop all players and ask for Bet
+                    AskNextPlayerToBet();
                     break;
 
                 case 'call': //{'action': 'call'}
                     //TODO: check if it your turn
-                    player.setBet(GetBigBlind.getBet());
+                    if (player.action == 'please_bet') {
+                        var players = GetPlayersStartingWithSmallBlind();
+                        player.setBet(players[1].getBet());
+                        player.setAction('call');
+
+                        if (ContinueBetting()) {
+                            AskNextPlayerToBet();
+                        } else {
+                            NextStepInTheGame();
+                        }
+                    }
 
                     //TODO: return that action was accepted or not.
                     BroadcastGameState();
@@ -168,11 +176,17 @@ wsServer.on('request', function(request) {
 
                 case 'raise': //{'action': 'raise', 'data': 20}
                     //TODO: check if it your turn
+                    if (player.action == 'please_bet') {
+                        //TODO: check if bet is allowed.
+                        player.setBet(message.data);
+                        player.setAction('raise');
 
-                    var bigBlindBet = GetBigBlind.getBet();
-                    //TODO: check if bet is allowed.
-
-                    player.setBet(message.data);
+                        if (ContinueBetting()) {
+                            AskNextPlayerToBet();
+                        } else {
+                            NextStepInTheGame();
+                        }
+                    }
 
                     //TODO: return that action was accepted or not.
                     BroadcastGameState();
@@ -181,7 +195,15 @@ wsServer.on('request', function(request) {
                 case 'fold': //{'action': 'fold'}
                     //TODO: check if it your turn
 
-                    player.fold();
+                    if (player.action == 'please_bet') {
+                        player.setAction('fold');
+
+                        if (ContinueBetting()) {
+                            AskNextPlayerToBet();
+                        } else {
+                            NextStepInTheGame();
+                        }
+                    }
 
                     //TODO: return that action was accepted or not.
                     BroadcastGameState();
@@ -190,7 +212,7 @@ wsServer.on('request', function(request) {
         }
     });
     connection.on('close', function(reasonCode, description) {
-        console.log('  Player ' + player.getIdentity() + ' disconnected.');
+        console.log('Player disconnected: ', player.getIdentity());
 
         Players = RemovePlayer(player); //TODO: or fold when game was already running
         Observers = RemoveObserver(player);
@@ -262,10 +284,17 @@ function ShuffleDeck() {
 }
 
 function ProvideOneCardToAllPlayers() {
-    Players.forEach(function(player){
+    PlayersForThisRound.forEach(function(player){
         var card = Cards.shift();
         player.addToHand(card);
     });
+}
+
+function ProvideCommunityCards(count) {
+    for (var i = 0; i < count; i++) {
+        var card = Cards.shift();
+        CommunityCards.push(card);
+    }
 }
 
 function bla() {
@@ -284,6 +313,9 @@ var Players = [];
 var Observers = [];
 var SmallBlindPosition = 0;
 
+var PlayersForThisRound = [];
+var CurrentPlayerForThisRound = 0;
+
 function Player(id, connection){
     this.id = id;
     this.connection = connection;
@@ -294,6 +326,7 @@ function Player(id, connection){
     this.credits = 0;
     this.hand = [];
     this.bet = 0;
+    this.action = '';
 }
 
 Player.prototype = {
@@ -301,7 +334,7 @@ Player.prototype = {
         return this.id;
     },
     getIdentity: function(){
-        return {name: this.name, id: this.id, credits: this.credits};
+        return {name: this.name, id: this.id, credits: this.credits, action: this.action};
     },
     getPublicGameState: function(){
         return {
@@ -318,7 +351,8 @@ Player.prototype = {
             credits: this.credits,
             bet: this.bet,
 
-            hand: this.hand
+            hand: this.hand,
+            action: this.action
         };
     },
     join: function(join){
@@ -336,8 +370,8 @@ Player.prototype = {
             this.credits = this.credits - bet;
         }
     },
-    fold: function(bet){
-        this.bet = 'fold';
+    setAction: function(action){
+        this.action = action;
     },
     getBet: function(){
         return this.bet;
@@ -372,7 +406,7 @@ function BroadcastPlayersList(){
     });
 }
 
-function BroadcastGameState(){
+function BroadcastGameState(currentPlayer){
     var playersList = [];
     var privatePlayersList = [];
     Players.forEach(function(player){
@@ -386,7 +420,7 @@ function BroadcastGameState(){
         var message = JSON.stringify({
             'action': 'game_state',
             'data': playersList,
-            'you': player.getPrivateGameState()
+            'me': player.getPrivateGameState()
             //TODO
         });
         player.connection.sendUTF(message);
@@ -423,10 +457,6 @@ function ShufflePlayers() {
     SmallBlindPosition = 0;
 }
 
-function GetPlayersInPosition() {
-    //TODO: return list of players with the small blind first
-}
-
 function IncreaseCreditsForAllPlayers(credits) {
     Players.forEach(function(player){
         if (player.joined) {
@@ -435,14 +465,26 @@ function IncreaseCreditsForAllPlayers(credits) {
     });
 }
 
-function GetSmallBlind() {
-    var smallBlind = undefined;
+function ResetActionForAllPlayers() {
+    PlayersForThisRound.forEach(function(player){
+        player.setAction('');
+    });
+}
+
+function GetPlayersStartingWithSmallBlind() {
+    var orderedPlayers = [];
+
     Players.forEach(function(player){
-        if (player.joined && player.index === SmallBlindPosition) {
-            smallBlind = player;
+        if (player.joined && player.index >= SmallBlindPosition) {
+            orderedPlayers.push(player);
         }
     });
-    return smallBlind;
+    Players.forEach(function(player){
+        if (player.joined && player.index < SmallBlindPosition) {
+            orderedPlayers.push(player);
+        }
+    });
+    return orderedPlayers;
 }
 
 function GetPlayerCount() {
@@ -455,20 +497,6 @@ function GetPlayerCount() {
     return joinedPlayers.length;
 }
 
-function GetBigBlind() {
-    var bigBlind = undefined;
-    var bigBlindPosition = SmallBlindPosition + 1;
-    if (bigBlindPosition >= (GetPlayerCount() - 1)) {
-        bigBlindPosition = 0;
-    }
-
-    Players.forEach(function(player){
-        if (player.joined && player.index === bigBlindPosition) {
-            bigBlind = player;
-        }
-    });
-    return bigBlind;
-}
 
 function MoveSmallBindToNextPlayer() {
     SmallBlindPosition++;
@@ -482,4 +510,83 @@ function RemoveObserver(playerToRemove) {
     return Observers.filter(function(player){
         return player.getId() !== playerToRemove.getId();
     });
+}
+
+function AskNextPlayerToBet() {
+    console.log("Ask next player to bet", CurrentPlayerForThisRound);
+    var player = PlayersForThisRound[CurrentPlayerForThisRound];
+
+    var message = JSON.stringify({
+        'action': 'please_bet',
+        'info': player.getIdentity(),
+        'community': CommunityCards
+    });
+
+    player.connection.sendUTF(message);
+    player.setAction('please_bet');
+
+    CurrentPlayerForThisRound++;
+
+    if (CurrentPlayerForThisRound >= PlayersForThisRound.length) {
+        CurrentPlayerForThisRound = 0;
+    }
+}
+
+function ContinueBetting() {
+    var continueBetting = false;
+    PlayersForThisRound.forEach(function(player){
+        if (player.action !== 'please_bet' && player.action !== '') {
+            continueBetting = true;
+        }
+    });
+
+    console.log()
+
+    if (continueBetting) {
+        return true;
+    }
+
+    var maxBet = 0;
+    PlayersForThisRound.forEach(function(player){
+        if (maxBet < player.bet) {
+            maxBet = player.bet;
+        }
+    });
+    PlayersForThisRound.forEach(function(player){
+        if (maxBet !== player.bet) {
+            continueBetting = true;
+        }
+    });
+
+    return continueBetting;
+}
+
+function NextStepInTheGame() {
+    console.log("Next step in the game");
+
+    if (CommunityCards.length == 0) {
+        console.log("Community cards from 0 to 3");
+        ProvideCommunityCards(3);
+        CurrentPlayerForThisRound = 0;
+        ResetActionForAllPlayers();
+        AskNextPlayerToBet();
+    } else if (CommunityCards.length == 3) {
+        console.log("Community cards from 3 to 4");
+        ProvideCommunityCards(1);
+        CurrentPlayerForThisRound = 0;
+        ResetActionForAllPlayers();
+        AskNextPlayerToBet();
+    } else if (CommunityCards.length == 4) {
+        console.log("Community cards from 4 to 5");
+        ProvideCommunityCards(1);
+        CurrentPlayerForThisRound = 0;
+        ResetActionForAllPlayers();
+        AskNextPlayerToBet();
+    } else if (CommunityCards.length == 5) {
+        //TODO: end of the game: determine score and collect bets
+
+        console.log("END of game");
+
+        ResetActionForAllPlayers();
+    }
 }
