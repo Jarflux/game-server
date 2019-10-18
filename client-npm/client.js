@@ -9,7 +9,7 @@ client.on('connectFailed', function(error) {
 
 client.on('connect', function(connection) {
     console.log('WebSocket Client Connected');
-    const data = { action:'join', data: 'Client name' };
+    const data = { action:'join', data: 'Client ' + Math.floor(Math.random()*100) };
     const json = JSON.stringify(data);
     connection.sendUTF(json);
 
@@ -26,6 +26,7 @@ client.on('connect', function(connection) {
 
             var message = JSON.parse(data.utf8Data);
             switch (message.action) {
+
                 case 'please_bet':
                     console.log("I have to bet now");
                     //TODO: send back 'call'
@@ -37,6 +38,7 @@ client.on('connect', function(connection) {
                     break;
 
                 case 'game_state':
+                    //TODO replace please bet with game state
                     console.log("Players list", message.data, message.me);
                     break;
             }
@@ -44,4 +46,4 @@ client.on('connect', function(connection) {
     });
 });
 
-client.connect('ws://localhost:8080/', 'echo-protocol');
+client.connect('ws://localhost:8081/', 'echo-protocol');

@@ -10,7 +10,7 @@
 
           <div :class="['hole-cards', `hole-cards--${player.status}`]" >
             <div class="playing-card" v-for="card in player.hole_cards">
-              <vue-playing-card  v-bind:signature="card" width="75"></vue-playing-card>
+              <vue-playing-card  v-bind:signature="card" style="width:75px;"></vue-playing-card>
             </div>
           </div>
 
@@ -23,10 +23,15 @@
 
       <div class="board row">
         <div class="playing-card" v-for="card in board">
-          <vue-playing-card v-bind:signature="card" width="100"></vue-playing-card>
+          <vue-playing-card v-bind:signature="card" style="width:100px;"></vue-playing-card>
         </div>
       </div>
     </div>
+
+    <button v-on:click="testAction">Test</button>
+    <button v-on:click="observe">Observe</button>
+    <button v-on:click="startGame">Start game</button>
+    <button v-on:click="startRound">Start round</button>
 
   </div>
 </template>
@@ -35,6 +40,16 @@
   import Vue from 'vue';
   import VuePlayingCard from 'vue-playing-card';
   import gamestate from './json/game-state.json'
+  import VueNativeSock from 'vue-native-websocket'
+
+  Vue.use(VueNativeSock, 'ws://localhost:8081', {
+      protocol: 'echo-protocol',
+      format: 'json',
+
+      reconnection: true, // (Boolean) whether to reconnect automatically (false)
+      reconnectionAttempts: 5, // (Number) number of reconnection attempts before giving up (Infinity),
+      reconnectionDelay: 3000, // (Number) how long to initially wait before attempting a new (1000)
+  });
 
   Vue.use(VuePlayingCard);
 
@@ -42,6 +57,39 @@
     name: 'app',
     data() {
       return gamestate
+    },
+    methods: {
+        testAction: function(val) {
+            gamestate.in_action++;
+            if (gamestate.in_action >= gamestate.players.length) {
+                gamestate.in_action = 0;
+            }
+        },
+
+        observe: function(val) {
+            const data = { action:'observe', data: 'Admin Panel' };
+            this.$socket.sendObj(data);
+        },
+
+        startGame: function(val) {
+            const data = { action:'new_game' };
+            this.$socket.sendObj(data);
+        },
+
+        startRound: function(val) {
+            const data = { action:'new_round' };
+            this.$socket.sendObj(data);
+        }
+    },
+    created () {
+        this.$options.sockets.onmessage = (data) => {
+            console.log(JSON.parse(data.data));
+
+            var newGameState =  JSON.parse(data.data).data;
+            gamestate.players = newGameState.players;
+            gamestate.in_action = newGameState.in_action;
+            gamestate.dealer = newGameState.dealer;
+        };
     }
   }
 </script>
@@ -57,8 +105,6 @@
   }
 
   .table {
-
-
     .players {
       display: flex;
       flex-direction: row;

@@ -1,0 +1,13 @@
+{
+  "game_id": "550da1cb2d909006e90004b1",
+  "small_blind": 10,
+  "big_blind": 20,
+  "largest_current_bet": 0,
+  "pot": 0,
+  "minimum_raise": 20,
+  "dealer": 0,
+  "in_action": 0,
+  "players": [
+  ],
+  "board": []
+}

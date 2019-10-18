@@ -4,16 +4,18 @@ var http = require('http');
 const crypto = require('crypto');
 const { rankBoard, rankDescription } = require('phe')
 
+let gameState = require('./initial-game-state.json');
+
 var server = http.createServer(function(request, response) {
     console.log((new Date()) + ' Received request for ' + request.url);
     response.writeHead(404);
     response.end();
 });
-server.listen(8080, function() {
+server.listen(8081, function() {
     console.log((new Date()) + ' Server is listening on port 8080');
 });
 
-wsServer = new WebSocketServer({
+let wsServer = new WebSocketServer({
     httpServer: server,
     // You should not use autoAcceptConnections for production
     // applications, as it defeats all standard cross-origin protection
@@ -28,7 +30,7 @@ function originIsAllowed(origin) {
     return true;
 }
 
-/*wsServer.on('upgrade', function (req, socket) {
+wsServer.on('upgrade', function (req, socket) {
     if (req.headers['upgrade'] !== 'websocket') {
         socket.end('HTTP/1.1 400 Bad Request');
         return;
@@ -45,7 +47,7 @@ function originIsAllowed(origin) {
         // Tell the client that we agree to communicate with JSON data
         responseHeaders.push('Sec-WebSocket-Protocol: json');
     }
-});*/
+});
 
 /*function generateAcceptValue(acceptKey) {
     return crypto
@@ -54,6 +56,14 @@ function originIsAllowed(origin) {
         .digest('base64');
 }*/
 
+Object.size = function(obj) {
+    var size = 0, key;
+    for (key in obj) {
+        if (obj.hasOwnProperty(key)) size++;
+    }
+    return size;
+};
+
 wsServer.on('request', function(request) {
     if (!originIsAllowed(request.origin)) {
         // Make sure we only accept requests from an allowed origin
@@ -61,190 +71,157 @@ wsServer.on('request', function(request) {
         console.log((new Date()) + ' Connection from origin ' + request.origin + ' rejected.');
         return;
     }
+    let connection = request.accept('echo-protocol', request.origin);
+    console.log((new Date()) + ' Connection accepted for ' + request.key);
 
-    var connection = request.accept('echo-protocol', request.origin);
-    console.log((new Date()) + ' Connection accepted.');
+    let client = new Client(request.key, connection);
+    Clients.push(client);
+    connection.sendUTF(JSON.stringify({action: 'connected', data: client.id}));
 
-    //
-    // New Player has connected.  So let's record its socket
-    //
-    var player = new Player(request.key, connection);
-
-    //
-    // Add the player to the list of all players
-    //
-    Players.push(player);
-
-    //
-    // We need to return the unique id of that player to the player itself
-    //
-    connection.sendUTF(JSON.stringify({action: 'connect', data: player.id}));
+    let player = new Player2(request.key, connection);
 
     connection.on('message', function(data) {
         if (data.type === 'utf8') {
-            //console.log('Received Message: ' + data.utf8Data);
-            //
-            // Process the requested action
-            //
+            console.log('Received Message: ' + data.utf8Data);
+
             var message = JSON.parse(data.utf8Data);
             switch (message.action){
-                //TODO case observe (only if valid observe API key)
 
-                //
-                // When the user sends the "join" action, he provides a name.
-                // Let's record it and as the player has a name, let's
-                // broadcast the list of all the players to everyone
-                //
                 case 'join':
-                    player.name = message.data;
-                    player.join(true);
+                    client.status = 'joined';
+                    player.gamestate.name = message.data;
+                    client.name = message.data;
+
+                    player.gamestate.id = Object.size(Players2);
+
+                    Players2[client.id] = player;
+
                     //TODO validation + max 6 people + only known bots
-                    console.log("Player joined the game: ", player.getIdentity());
-                    BroadcastPlayersList();
+                    console.log("Player joined the game:", client.name);
+                    //todo BroadcastPlayersList();
+                    BroadcastGameState2();
                     break;
 
                 case 'unjoin':
-                    player.join(false);
-                    console.log(player.name + " unjoined the game!");
-                    BroadcastPlayersList();
+                    client.status = 'not-joined';
+                    console.log(client.name + " unjoined the game!");
+                    //todo BroadcastPlayersList();
                     break;
 
                 case 'observe':
-                    player.name = message.data;
-                    console.log(player.name + " is observing the game!");
+                    client.status = 'admin';
+                    client.name = message.data;
+                    console.log(client.name + " is observing the game!");
 
                     //TODO only allow if API key is valid
 
-                    Players = RemovePlayer(player);
-                    Observers.push(player);
+                    //TODO Players = RemovePlayer(player);
+                    //Observers.push(player);
 
-                    BroadcastPlayersList();
+                    //BroadcastPlayersList();
+                    BroadcastGameState2();
                     break;
 
                 //TODO: Only initiated by Server itself
                 case 'new_game':
-                    ShufflePlayers();
-                    //TODO: Park all unjoined players
-                    IncreaseCreditsForAllPlayers(1000);
-                    BroadcastPlayersList();
-
-                    NewDeck(); //shuffled 3 decks
-                    console.log("Cards", Cards);
+                    // ShufflePlayers();
+                    // //TODO: Park all unjoined players
+                    // IncreaseCreditsForAllPlayers(1000);
+                    // BroadcastPlayersList();
+                    //
+                    // NewDeck(); //shuffled 3 decks
+                    // console.log("Cards", Cards);
                     break;
 
                 case 'new_round':
-                    MoveSmallBindToNextPlayer();
-                    PlayersForThisRound = GetPlayersStartingWithSmallBlind();
-
-                    console.log("ROUND PLAYERS: ", PlayersForThisRound.length);
-
-                    PlayersForThisRound[0].setBet(5);
-                    PlayersForThisRound[1].setBet(10);
-                    CurrentPlayerForThisRound = 2;
-                    BroadcastGameState();
-
-                    //give card to all players
-
-                    ProvideOneCardToAllPlayers();
-                    BroadcastGameState();
-
-                    //give card to all players
-                    ProvideOneCardToAllPlayers();
-                    BroadcastGameState();
-
-                    //loop all players and ask for Bet
-                    AskNextPlayerToBet();
+                    // MoveSmallBindToNextPlayer();
+                    // PlayersForThisRound = GetPlayersStartingWithSmallBlind();
+                    //
+                    // console.log("ROUND PLAYERS: ", PlayersForThisRound.length);
+                    //
+                    // PlayersForThisRound[0].setBet(5);
+                    // PlayersForThisRound[1].setBet(10);
+                    // CurrentPlayerForThisRound = 2;
+                    // BroadcastGameState();
+                    //
+                    // //give card to all players
+                    //
+                    // ProvideOneCardToAllPlayers();
+                    // BroadcastGameState();
+                    //
+                    // //give card to all players
+                    // ProvideOneCardToAllPlayers();
+                    // BroadcastGameState();
+                    //
+                    // //loop all players and ask for Bet
+                    // AskNextPlayerToBet();
                     break;
 
                 case 'call': //{'action': 'call'}
-                    //TODO: check if it your turn
-                    if (player.action == 'please_bet') {
-                        var players = GetPlayersStartingWithSmallBlind();
-                        player.setBet(players[1].getBet());
-                        player.setAction('call');
-
-                        if (ContinueBetting()) {
-                            AskNextPlayerToBet();
-                        } else {
-                            NextStepInTheGame();
-                        }
-                    }
-
-                    //TODO: return that action was accepted or not.
-                    BroadcastGameState();
+                    // //TODO: check if it your turn
+                    // if (player.action == 'please_bet') {
+                    //     var players = GetPlayersStartingWithSmallBlind();
+                    //     player.setBet(players[1].getBet());
+                    //     player.setAction('call');
+                    //
+                    //     if (ContinueBetting()) {
+                    //         AskNextPlayerToBet();
+                    //     } else {
+                    //         NextStepInTheGame();
+                    //     }
+                    // }
+                    //
+                    // //TODO: return that action was accepted or not.
+                    // BroadcastGameState();
                     break;
 
                 case 'raise': //{'action': 'raise', 'data': 20}
-                    //TODO: check if it your turn
-                    if (player.action == 'please_bet') {
-                        //TODO: check if bet is allowed.
-                        player.setBet(message.data);
-                        player.setAction('raise');
-
-                        if (ContinueBetting()) {
-                            AskNextPlayerToBet();
-                        } else {
-                            NextStepInTheGame();
-                        }
-                    }
-
-                    //TODO: return that action was accepted or not.
-                    BroadcastGameState();
+                    // //TODO: check if it your turn
+                    // if (player.action == 'please_bet') {
+                    //     //TODO: check if bet is allowed.
+                    //     player.setBet(message.data);
+                    //     player.setAction('raise');
+                    //
+                    //     if (ContinueBetting()) {
+                    //         AskNextPlayerToBet();
+                    //     } else {
+                    //         NextStepInTheGame();
+                    //     }
+                    // }
+                    //
+                    // //TODO: return that action was accepted or not.
+                    // BroadcastGameState();
                     break;
 
                 case 'fold': //{'action': 'fold'}
-                    //TODO: check if it your turn
-
-                    if (player.action == 'please_bet') {
-                        player.setAction('fold');
-
-                        if (ContinueBetting()) {
-                            AskNextPlayerToBet();
-                        } else {
-                            NextStepInTheGame();
-                        }
-                    }
-
-                    //TODO: return that action was accepted or not.
-                    BroadcastGameState();
+                    // //TODO: check if it your turn
+                    //
+                    // if (player.action == 'please_bet') {
+                    //     player.setAction('fold');
+                    //
+                    //     if (ContinueBetting()) {
+                    //         AskNextPlayerToBet();
+                    //     } else {
+                    //         NextStepInTheGame();
+                    //     }
+                    // }
+                    //
+                    // //TODO: return that action was accepted or not.
+                    // BroadcastGameState();
                     break;
             }
         }
     });
     connection.on('close', function(reasonCode, description) {
-        console.log('Player disconnected: ', player.getIdentity());
+        console.log('Player disconnected: ', client.id);
 
-        Players = RemovePlayer(player); //TODO: or fold when game was already running
-        Observers = RemoveObserver(player);
+        player.gamestate.status = "inactive";
+
+        //TODO
+        //Players = RemovePlayer(player); //TODO: or fold when game was already running
+        //Observers = RemoveObserver(player);
     });
 });
-
-
-
-/*function informClients() {
-    for (var i in connections) {
-        var connection = connections[i];
-        if (connection.connected) {
-            var card = cards_pool.shift();
-            if (card) {
-                connection.sendUTF(card);
-            } else {
-                connection.sendUTF("All cards are dealt!!!!");
-            }
-        }
-    }
-    if (cards_pool.length > 0) {
-        setTimeout(informClients, 1000);
-    } else {
-        console.log("All cards are dealt");
-    }
-}
-
-function startSendingCards() {
-    informClients();
-}
-
-setTimeout(startSendingCards, 10000);*/
 
 // -----------------------------------------------------------
 // utils
@@ -309,23 +286,46 @@ function bla() {
 // -----------------------------------------------------------
 // List of all players
 // -----------------------------------------------------------
-var Players = [];
-var Observers = [];
-var SmallBlindPosition = 0;
+let Players = [];
+let Clients = [];
+let Players2 = {};
 
-var PlayersForThisRound = [];
-var CurrentPlayerForThisRound = 0;
+let Observers = [];
+let SmallBlindPosition = 0;
+
+let PlayersForThisRound = [];
+let CurrentPlayerForThisRound = 0;
+
+function Client(id, connection){
+    this.id = id;
+    this.name = '';
+    this.connection = connection;
+    this.status = 'not-joined'; //not-joined, joined, observer, admin
+}
+
+function Player2(id, connection){
+    this.id = id;
+    this.connection = connection;
+    this.gamestate = {
+        "id": 0,
+        "name": "",
+        "status": "active",
+        "stack": 0,
+        "bet": 0,
+        "hole_cards": []
+    };
+}
 
 function Player(id, connection){
     this.id = id;
     this.connection = connection;
-    this.name = '';
-    this.index = -1;
+    this.name = ''; //remove
+    this.index = -1; //remove
 
-    this.joined = false;
+    this.joined = false; //remove
     this.credits = 0;
-    this.hand = [];
-    this.bet = 0;
+    this.hand = []; //remove
+    this.bet = 0; //remove
     this.action = '';
 }
 
@@ -385,24 +385,39 @@ Player.prototype = {
 // Routine to broadcast the list of all players to everyone
 // ---------------------------------------------------------
 function BroadcastPlayersList(){
-    var playersList = [];
-    Players.forEach(function(player){
-        if (player.name !== '' && player.joined){
-            playersList.push(player.getIdentity());
+    var clientList = [];
+    Clients.forEach(function(client){
+        if (client.status === 'joined' || client.status === 'not-joined'){
+            clientList.push(client.getIdentity());
         }
     });
 
     var message = JSON.stringify({
         'action': 'players_list',
-        'data': playersList
+        'data': clientList
     });
 
-    Players.forEach(function(player){
-        player.connection.sendUTF(message);
+    Clients.forEach(function(client){
+        client.connection.sendUTF(message);
     });
+}
 
-    Observers.forEach(function(observer){
-        observer.connection.sendUTF(message);
+function BroadcastGameState2(currentPlayer){
+
+    gameState.players = [];
+    for (var playerId in Players2) {
+        var player = Players2[playerId];
+        gameState.players.push(player.gamestate);
+    }
+
+    Clients.forEach(function(client){
+        if (client.status === 'admin') {
+            var message = JSON.stringify({
+                'action': 'game_state',
+                'data': gameState
+            });
+            client.connection.sendUTF(message);
+        }
     });
 }
 
