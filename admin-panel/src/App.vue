@@ -5,7 +5,7 @@
     <div class="table container" v-if="connection.connected">
       <div class="players row">
         <div :class="['player', `player--${player.status}`, (player.id === gamestate.in_action) ? 'player--in_action' : '']" v-for="player in gamestate.players">
-          <div class="name">{{ player.name }} {{ player.id }} <img class="dealer-button" src="./assets/dealer-button.png" v-if="player.id === gamestate.dealer"/></div>
+          <div class="name">{{ player.name }} <img class="dealer-button" src="./assets/dealer-button.png" v-if="player.id === gamestate.dealer"/></div>
           <div class="chips-stack">{{ player.stack }}</div>
 
           <div :class="['hole-cards', `hole-cards--${player.status}`]" >
@@ -23,19 +23,18 @@
 
       <div class="board row">
         <div class="playing-card" v-for="card in gamestate.board">
-          <vue-playing-card v-bind:signature="card" style="width:100px;"></vue-playing-card>
+          <vue-playing-card height="90" v-bind:signature="card" style="width:100px;"></vue-playing-card>
         </div>
       </div>
     </div>
 
-    <button v-on:click="testAction">Test</button>
-    <br /><br />
     <button v-on:click="join" v-if="!connection.joined">Join</button>
     <button v-on:click="unjoin" v-if="connection.joined">Unjoin</button>
 
     <br /><br />
     <button v-on:click="startGame" v-if="connection.joined">Start game</button>
     <button v-on:click="startRound" v-if="connection.joined">Start round</button>
+    <button v-on:click="nextCardsAndBet" v-if="connection.joined && gamestate.dealer !== -1 && gamestate.in_action === -1 && gamestate.board.length < 5">Next cards & bet</button>
 
   </div>
 </template>
@@ -71,30 +70,24 @@
       }
     },
     methods: {
-        testAction: function(val) {
-            gamestate.in_action++;
-            if (gamestate.in_action >= gamestate.players.length) {
-                gamestate.in_action = 0;
-            }
-        },
-
         join: function(val) {
             const data = { action:'admin', data: 'Admin Panel' };
             this.$socket.sendObj(data);
         },
-
         unjoin: function(val) {
             const data = { action:'unjoin', data: 'Admin Panel' };
             this.$socket.sendObj(data);
         },
-
         startGame: function(val) {
             const data = { action:'new_game' };
             this.$socket.sendObj(data);
         },
-
         startRound: function(val) {
             const data = { action:'new_round' };
+            this.$socket.sendObj(data);
+        },
+        nextCardsAndBet: function(val) {
+            const data = { action:'next_cards_and_bet' };
             this.$socket.sendObj(data);
         }
     },

@@ -1,7 +1,9 @@
 #!/usr/bin/env node
-var WebSocketClient = require('websocket').client;
+let WebSocketClient = require('websocket').client;
 
-var client = new WebSocketClient();
+let client = new WebSocketClient();
+
+let UUID = '';
 
 client.on('connectFailed', function(error) {
     console.log('Connect Error: ' + error.toString());
@@ -26,20 +28,25 @@ client.on('connect', function(connection) {
 
             var message = JSON.parse(data.utf8Data);
             switch (message.action) {
-
-                case 'please_bet':
-                    console.log("I have to bet now");
-                    //TODO: send back 'call'
-                    connection.sendUTF(JSON.stringify({ action:'call'}));
-                    break;
-
-                case 'players_list':
-                    console.log("Players list", message.data);
+                case 'connected':
+                    UUID = message.data;
+                    console.log("UUID", UUID);
                     break;
 
                 case 'game_state':
-                    //TODO replace please bet with game state
-                    console.log("Players list", message.data, message.me);
+                    let gameState = message.data;
+                    console.log("Game state", gameState);
+
+                    gameState.players.forEach(function(player){
+                        if (UUID === player.uuid && player.id === gameState.in_action) {
+                            console.log("My turn");
+
+                            //Return with a call, no matter what the input is
+                            connection.sendUTF(JSON.stringify({ action:'call'}));
+                            console.log("Responded with:", "CALL");
+                        }
+                    });
+
                     break;
             }
         }
