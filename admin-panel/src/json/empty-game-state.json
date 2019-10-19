@@ -1,10 +1,10 @@
 {
-  "game_id": "550da1cb2d909006e90004b1",
+  "game_id": "",
   "small_blind": 10,
   "big_blind": 20,
-  "largest_current_bet": 0,
+  "largest_current_bet": 300,
   "pot": 0,
-  "minimum_raise": 20,
+  "minimum_raise": 50,
   "dealer": -1,
   "in_action": -1,
   "players": [

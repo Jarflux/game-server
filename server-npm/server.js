@@ -72,13 +72,15 @@ wsServer.on('request', function(request) {
         return;
     }
     let connection = request.accept('echo-protocol', request.origin);
-    console.log((new Date()) + ' Connection accepted for ' + request.key);
+    console.log('Connection accepted for ' + request.key);
 
     let client = new Client(request.key, connection);
     Clients.push(client);
     connection.sendUTF(JSON.stringify({action: 'connected', data: client.id}));
 
-    let player = new Player2(request.key, connection);
+    //TODO, also broadcast list of clients
+
+    let player = new Player(request.key, connection);
 
     connection.on('message', function(data) {
         if (data.type === 'utf8') {
@@ -92,48 +94,74 @@ wsServer.on('request', function(request) {
                     player.gamestate.name = message.data;
                     client.name = message.data;
 
-                    player.gamestate.id = Object.size(Players2);
-
-                    Players2[client.id] = player;
+                    player.gamestate.id = Object.size(Players);
+                    Players[client.id] = player;
 
                     //TODO validation + max 6 people + only known bots
                     console.log("Player joined the game:", client.name);
-                    //todo BroadcastPlayersList();
-                    BroadcastGameState2();
+
+                    BroadcastGameState();
                     break;
 
                 case 'unjoin':
                     client.status = 'not-joined';
                     console.log(client.name + " unjoined the game!");
-                    //todo BroadcastPlayersList();
+
+                    client.connection.sendUTF(JSON.stringify({
+                        'action': 'unjoined',
+                        'data': ''
+                    }));
+
+                    RemovePlayer(player);
+
+                    BroadcastGameState();
                     break;
 
                 case 'observe':
-                    client.status = 'admin';
+                    client.status = 'observer';
                     client.name = message.data;
                     console.log(client.name + " is observing the game!");
 
                     //TODO only allow if API key is valid
 
-                    //TODO Players = RemovePlayer(player);
-                    //Observers.push(player);
+                    RemovePlayer(player);
 
-                    //BroadcastPlayersList();
-                    BroadcastGameState2();
+                    BroadcastGameState();
                     break;
 
-                //TODO: Only initiated by Server itself
+                case 'admin':
+                    client.status = 'admin';
+                    client.name = message.data;
+                    console.log(client.name + " is administrator for the game!");
+
+                    //TODO only allow if API key is valid
+
+                    client.connection.sendUTF(JSON.stringify({
+                        'action': 'joined',
+                        'data': ''
+                    }));
+                    BroadcastGameState();
+                    break;
+
+                //TODO: Only initiated by Admin Panel itself
                 case 'new_game':
-                    // ShufflePlayers();
+                    ShufflePlayers();
+                    IncreaseStackForAllPlayers(1000);
+
+                    BroadcastGameState();
+
                     // //TODO: Park all unjoined players
                     // IncreaseCreditsForAllPlayers(1000);
                     // BroadcastPlayersList();
                     //
-                    // NewDeck(); //shuffled 3 decks
+                    // NewDeck();
                     // console.log("Cards", Cards);
                     break;
 
                 case 'new_round':
+                    NewDeck();
+                    console.log("Cards", Cards);
+
                     // MoveSmallBindToNextPlayer();
                     // PlayersForThisRound = GetPlayersStartingWithSmallBlind();
                     //
@@ -213,13 +241,15 @@ wsServer.on('request', function(request) {
         }
     });
     connection.on('close', function(reasonCode, description) {
-        console.log('Player disconnected: ', client.id);
+        console.log('Client disconnected: ', client.id);
 
         player.gamestate.status = "inactive";
+        RemoveClient(client);
 
-        //TODO
-        //Players = RemovePlayer(player); //TODO: or fold when game was already running
-        //Observers = RemoveObserver(player);
+        //TODO: fix if client 2 disconnects and connects again, that the same same player & client is used again.
+
+        BroadcastGameState();
+        //TODO, also broadcast list of clients
     });
 });
 
@@ -239,7 +269,6 @@ function shuffle(a) {
 // Game state
 // -----------------------------------------------------------
 
-var gameStarted = false;
 var Cards = [];
 var CommunityCards = [];
 
@@ -286,15 +315,8 @@ function bla() {
 // -----------------------------------------------------------
 // List of all players
 // -----------------------------------------------------------
-let Players = [];
 let Clients = [];
-let Players2 = {};
-
-let Observers = [];
-let SmallBlindPosition = 0;
-
-let PlayersForThisRound = [];
-let CurrentPlayerForThisRound = 0;
+let Players = {};
 
 function Client(id, connection){
     this.id = id;
@@ -303,7 +325,7 @@ function Client(id, connection){
     this.status = 'not-joined'; //not-joined, joined, observer, admin
 }
 
-function Player2(id, connection){
+function Player(id, connection){
     this.id = id;
     this.connection = connection;
     this.gamestate = {
@@ -316,7 +338,7 @@ function Player2(id, connection){
     };
 }
 
-function Player(id, connection){
+/*function Player(id, connection){
     this.id = id;
     this.connection = connection;
     this.name = ''; //remove
@@ -379,11 +401,12 @@ Player.prototype = {
     increaseCredits: function(credits){
         this.credits = this.credits + credits;
     }
-};
+};*/
 
 // ---------------------------------------------------------
 // Routine to broadcast the list of all players to everyone
 // ---------------------------------------------------------
+/*
 function BroadcastPlayersList(){
     var clientList = [];
     Clients.forEach(function(client){
@@ -400,28 +423,29 @@ function BroadcastPlayersList(){
     Clients.forEach(function(client){
         client.connection.sendUTF(message);
     });
-}
+}*/
 
-function BroadcastGameState2(currentPlayer){
-
+function BroadcastGameState(currentPlayer){
     gameState.players = [];
-    for (var playerId in Players2) {
-        var player = Players2[playerId];
+    for (let playerId in Players) {
+        let player = Players[playerId];
         gameState.players.push(player.gamestate);
     }
 
     Clients.forEach(function(client){
-        if (client.status === 'admin') {
-            var message = JSON.stringify({
+        if (client.status === 'admin' || client.status === 'observer') {
+            let message = JSON.stringify({
                 'action': 'game_state',
                 'data': gameState
             });
             client.connection.sendUTF(message);
         }
     });
+
+    //TODO also broadcast to current player, but only own state fully and others states partially.
 }
 
-function BroadcastGameState(currentPlayer){
+/*function BroadcastGameState(currentPlayer){
     var playersList = [];
     var privatePlayersList = [];
     Players.forEach(function(player){
@@ -450,15 +474,35 @@ function BroadcastGameState(currentPlayer){
     Observers.forEach(function(observer){
         observer.connection.sendUTF(message);
     });
-}
+}*/
 
 function RemovePlayer(playerToRemove) {
-    return Players.filter(function(player){
-        return player.getId() !== playerToRemove.getId();
+    delete Players[playerToRemove.id];
+}
+
+function RemoveClient(clientToRemove) {
+    return Clients.filter(function(client){
+        return client.id !== clientToRemove.id;
     });
 }
 
 function ShufflePlayers() {
+    let keys = Object.keys(Players);
+    keys.sort(function(a,b) {return Math.random() - 0.5;});
+
+    let PlayersNew = {};
+
+    let index = 0;
+    keys.forEach(function(k) {
+        PlayersNew[k] = Players[k];
+        PlayersNew[k].id = index;
+        index++;
+    });
+
+    Players = PlayersNew;
+}
+
+/*function ShufflePlayers() {
     shuffle(Players);
 
     var index = 0;
@@ -470,23 +514,22 @@ function ShufflePlayers() {
     });
 
     SmallBlindPosition = 0;
+}*/
+
+function IncreaseStackForAllPlayers(credits) {
+    for (let playerId in Players) {
+        let player = Players[playerId];
+        player.stack = player.stack + credits;
+    }
 }
 
-function IncreaseCreditsForAllPlayers(credits) {
-    Players.forEach(function(player){
-        if (player.joined) {
-            player.increaseCredits(credits);
-        }
-    });
-}
-
-function ResetActionForAllPlayers() {
+/*function ResetActionForAllPlayers() {
     PlayersForThisRound.forEach(function(player){
         player.setAction('');
     });
-}
+}*/
 
-function GetPlayersStartingWithSmallBlind() {
+/*function GetPlayersStartingWithSmallBlind() {
     var orderedPlayers = [];
 
     Players.forEach(function(player){
@@ -500,9 +543,9 @@ function GetPlayersStartingWithSmallBlind() {
         }
     });
     return orderedPlayers;
-}
+}*/
 
-function GetPlayerCount() {
+/*function GetPlayerCount() {
     var joinedPlayers = Players.filter(function(player){
         if (player.name !== '' && player.joined){
             return true;
@@ -510,24 +553,23 @@ function GetPlayerCount() {
         return false;
     });
     return joinedPlayers.length;
-}
+}*/
 
-
-function MoveSmallBindToNextPlayer() {
+/*function MoveSmallBindToNextPlayer() {
     SmallBlindPosition++;
 
     if (SmallBlindPosition >= (GetPlayerCount() - 1)) {
         SmallBlindPosition = 0;
     }
-}
+}*/
 
-function RemoveObserver(playerToRemove) {
+/*function RemoveObserver(playerToRemove) {
     return Observers.filter(function(player){
         return player.getId() !== playerToRemove.getId();
     });
-}
+}*/
 
-function AskNextPlayerToBet() {
+/*function AskNextPlayerToBet() {
     console.log("Ask next player to bet", CurrentPlayerForThisRound);
     var player = PlayersForThisRound[CurrentPlayerForThisRound];
 
@@ -545,9 +587,9 @@ function AskNextPlayerToBet() {
     if (CurrentPlayerForThisRound >= PlayersForThisRound.length) {
         CurrentPlayerForThisRound = 0;
     }
-}
+}*/
 
-function ContinueBetting() {
+/*function ContinueBetting() {
     var continueBetting = false;
     PlayersForThisRound.forEach(function(player){
         if (player.action !== 'please_bet' && player.action !== '') {
@@ -572,9 +614,9 @@ function ContinueBetting() {
     });
 
     return continueBetting;
-}
+}*/
 
-function NextStepInTheGame() {
+/*function NextStepInTheGame() {
     console.log("Next step in the game");
 
     if (CommunityCards.length == 0) {
@@ -602,4 +644,4 @@ function NextStepInTheGame() {
 
         ResetActionForAllPlayers();
     }
-}
+}*/

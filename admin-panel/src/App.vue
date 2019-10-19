@@ -1,11 +1,11 @@
 <template>
   <div id="app">
-    <h2>Game ID: {{ game_id }}</h2>
+    <h2>Game ID: {{ gamestate.game_id }}</h2>
 
-    <div class="table container">
+    <div class="table container" v-if="connection.connected">
       <div class="players row">
-        <div :class="['player', `player--${player.status}`, (player.id === in_action) ? 'player--in_action' : '']" v-for="player in players">
-          <div class="name">{{ player.name }} <img class="dealer-button" src="./assets/dealer-button.png" v-if="player.id === dealer"/></div>
+        <div :class="['player', `player--${player.status}`, (player.id === gamestate.in_action) ? 'player--in_action' : '']" v-for="player in gamestate.players">
+          <div class="name">{{ player.name }} {{ player.id }} <img class="dealer-button" src="./assets/dealer-button.png" v-if="player.id === gamestate.dealer"/></div>
           <div class="chips-stack">{{ player.stack }}</div>
 
           <div :class="['hole-cards', `hole-cards--${player.status}`]" >
@@ -19,19 +19,23 @@
         </div>
       </div>
 
-      <div class="pot">Pot: {{ pot }}</div>
+      <div class="pot" v-if="connection.connected">Pot: {{ gamestate.pot }}</div>
 
       <div class="board row">
-        <div class="playing-card" v-for="card in board">
+        <div class="playing-card" v-for="card in gamestate.board">
           <vue-playing-card v-bind:signature="card" style="width:100px;"></vue-playing-card>
         </div>
       </div>
     </div>
 
     <button v-on:click="testAction">Test</button>
-    <button v-on:click="observe">Observe</button>
-    <button v-on:click="startGame">Start game</button>
-    <button v-on:click="startRound">Start round</button>
+    <br /><br />
+    <button v-on:click="join" v-if="!connection.joined">Join</button>
+    <button v-on:click="unjoin" v-if="connection.joined">Unjoin</button>
+
+    <br /><br />
+    <button v-on:click="startGame" v-if="connection.joined">Start game</button>
+    <button v-on:click="startRound" v-if="connection.joined">Start round</button>
 
   </div>
 </template>
@@ -41,6 +45,11 @@
   import VuePlayingCard from 'vue-playing-card';
   import gamestate from './json/game-state.json'
   import VueNativeSock from 'vue-native-websocket'
+
+  let connection = {
+      connected: false,
+      joined: false
+  };
 
   Vue.use(VueNativeSock, 'ws://localhost:8081', {
       protocol: 'echo-protocol',
@@ -56,7 +65,10 @@
   export default {
     name: 'app',
     data() {
-      return gamestate
+      return {
+          gamestate: gamestate,
+          connection: connection
+      }
     },
     methods: {
         testAction: function(val) {
@@ -66,8 +78,13 @@
             }
         },
 
-        observe: function(val) {
-            const data = { action:'observe', data: 'Admin Panel' };
+        join: function(val) {
+            const data = { action:'admin', data: 'Admin Panel' };
+            this.$socket.sendObj(data);
+        },
+
+        unjoin: function(val) {
+            const data = { action:'unjoin', data: 'Admin Panel' };
             this.$socket.sendObj(data);
         },
 
@@ -83,12 +100,41 @@
     },
     created () {
         this.$options.sockets.onmessage = (data) => {
-            console.log(JSON.parse(data.data));
+            let message = JSON.parse(data.data);
 
-            var newGameState =  JSON.parse(data.data).data;
-            gamestate.players = newGameState.players;
-            gamestate.in_action = newGameState.in_action;
-            gamestate.dealer = newGameState.dealer;
+            console.log(message);
+
+            switch (message.action) {
+                case "game_state":
+                    let newGameState = message.data;
+                    gamestate.players = newGameState.players;
+                    gamestate.in_action = newGameState.in_action;
+                    gamestate.dealer = newGameState.dealer;
+                    gamestate.game_id = newGameState.game_id;
+                    gamestate.small_blind = newGameState.small_blind;
+                    gamestate.big_blind = newGameState.big_blind;
+                    gamestate.largest_current_bet = newGameState.largest_current_bet;
+                    gamestate.pot = newGameState.pot;
+                    gamestate.minimum_raise = newGameState.minimum_raise;
+                    gamestate.board = newGameState.board;
+
+                    break;
+                case "connected":
+                   console.log("Connected");
+                   connection.connected = true;
+                   break;
+                case "joined":
+                    console.log("Joined");
+                    connection.joined = true;
+                    break;
+                case "unjoined":
+                    console.log("Unjoined");
+                    connection.joined = false;
+                    break;
+                default:
+                    console.log(message);
+                    break;
+            }
         };
     }
   }
@@ -122,6 +168,10 @@
         &--out{
           filter: contrast(50%) opacity(100%) grayscale(50%);
           background:gray;
+        }
+
+        &--inactive {
+          color: red;
         }
 
         .name{
