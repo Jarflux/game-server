@@ -142,7 +142,7 @@ wsServer.on('request', function(request) {
 
                     gameState.dealer = -1;
                     gameState.in_action = -1;
-                    //TODO reset other fields in the gamestate
+                    //TODO reset other fields in the gamestate?
 
                     EraseHoleCardsForAllPlayers();
                     gameState.board = [];
@@ -177,26 +177,32 @@ wsServer.on('request', function(request) {
                     break;
 
                 case 'next_cards_and_bet':
-                    //TODO determine next step
                     console.log("Next step in the game");
 
                     if (gameState.largest_current_bet === 0) {
                         //first round, no Board Cards yet, just bet
+                        ActivateGame(); //this will trigger the first player to play
                     } else if (gameState.board.length == 0) {
                         console.log("FLOP");
                         ProvideBoardCards(3);
+                        ActivateGame(); //this will trigger the first player to play
                     } else if (gameState.board.length == 3) {
                         console.log("TURN");
                         ProvideBoardCards(1);
+                        ActivateGame(); //this will trigger the first player to play
                     } else if (gameState.board.length == 4) {
                         console.log("RIVER");
                         ProvideBoardCards(1);
+                        ActivateGame(); //this will trigger the first player to play
                     } else if (gameState.board.length == 5) {
                         //TODO: end of the game: determine score and collect bets
+                        //TODO: build ranking
+                        //TODO send end result (ranking) object over websockets to all clients.
+
+                        gameState.in_action = -1;
+
                         console.log("END of game");
                     }
-
-                    ActivateGame(); //this will trigger the first player to play
 
                     BroadcastGameState();
                     break;
