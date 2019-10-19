@@ -223,7 +223,9 @@ wsServer.on('request', function(request) {
                     //TODO add timeout to slow the game
                     //TODO retry
                     //TODO what if call, raise is invalid, respond back to client
-                    //TODO if client doesn't respond within 5 seconds, then fold for that player.
+                    //TODO if client doesn't respond within 5 seconds, then fold for that player. & move to next player
+
+                    //TODO gameState.in_action++ (maar als groter dan # Players, zet terug naar 0).
 
                     BroadcastGameState();
                     break;
