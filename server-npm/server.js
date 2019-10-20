@@ -140,6 +140,8 @@ wsServer.on('request', function(request) {
                     ShufflePlayers();
                     IncreaseStackForAllPlayers(1000);
 
+                    gameState.game_id = GetNewGameId();
+
                     gameState.dealer = -1;
                     gameState.in_action = -1;
                     //TODO reset other fields in the gamestate?
@@ -163,12 +165,11 @@ wsServer.on('request', function(request) {
 
                     MoveDealerToNextPlayer();
                     gameState.in_action = -1;
+                    gameState.largest_current_bet = 0; //TODO correct?
 
                     ProvideOneCardToAllPlayers();
                     ProvideOneCardToAllPlayers();
 
-                    GetSmallBlind().setBet(gameState.small_blind);
-                    GetBigBlind().setBet(gameState.big_blind);
                     //TODO also deduct the bet from the stack (or only at the end?)
 
                     //TODO: this will give the first turn to the small blind (first turn should be for player after big blind
@@ -182,18 +183,25 @@ wsServer.on('request', function(request) {
                     if (gameState.largest_current_bet === 0) {
                         //first round, no Board Cards yet, just bet
                         ActivateGame(); //this will trigger the first player to play
+                        BroadcastGameState();
                     } else if (gameState.board.length == 0) {
                         console.log("FLOP");
                         ProvideBoardCards(3);
+                        ResetLastActionForAllPlayers();
                         ActivateGame(); //this will trigger the first player to play
+                        BroadcastGameState();
                     } else if (gameState.board.length == 3) {
                         console.log("TURN");
                         ProvideBoardCards(1);
+                        ResetLastActionForAllPlayers();
                         ActivateGame(); //this will trigger the first player to play
+                        BroadcastGameState();
                     } else if (gameState.board.length == 4) {
                         console.log("RIVER");
                         ProvideBoardCards(1);
+                        ResetLastActionForAllPlayers();
                         ActivateGame(); //this will trigger the first player to play
+                        BroadcastGameState();
                     } else if (gameState.board.length == 5) {
                         //TODO: end of the game: determine score and collect bets
                         //TODO: build ranking
@@ -202,38 +210,61 @@ wsServer.on('request', function(request) {
                         gameState.in_action = -1;
 
                         console.log("END of game");
+                        GetRankingAndBroadcast();
                     }
-
-                    BroadcastGameState();
                     break;
 
                 case 'call': //{'action': 'call'}
-                    // //TODO: check if it your turn
-                    // if (player.action == 'please_bet') {
-                    //     var players = GetPlayersStartingWithSmallBlind();
-                    //     player.setBet(players[1].getBet());
-                    //     player.setAction('call');
-                    //
-                    //     if (ContinueBetting()) {
-                    //         AskNextPlayerToBet();
-                    //     } else {
-                    //         NextStepInTheGame();
-                    //     }
-                    // }
-                    //
-                    // //TODO: return that action was accepted or not.
-                    // BroadcastGameState();
-                    gameState.in_action = -1; //TODO remove, just for testing
+                    setTimeout(function () {
+                        if (player.id === gameState.in_action) {
+                            console.log("It's your turn");
 
-                    //TODO move to the next player (if needed, otherwise stop & reset in_action)
-                    //TODO add timeout to slow the game
-                    //TODO retry
-                    //TODO what if call, raise is invalid, respond back to client
-                    //TODO if client doesn't respond within 5 seconds, then fold for that player. & move to next player
+                            player.setBet(gameState.largest_current_bet);
+                            player.last_action = 'call';
 
-                    //TODO gameState.in_action++ (maar als groter dan # Players, zet terug naar 0).
+                            if (!DoesEveryoneHasEqualBets()) {
+                                gameState.in_action = gameState.in_action + 1;
 
-                    BroadcastGameState();
+                                if (gameState.in_action >= Players.length) {
+                                    gameState.in_action = 0;
+                                }
+
+                                BroadcastGameState();
+                            } else {
+                                gameState.in_action = -1;
+                                BroadcastGameState();
+                            }
+                        } else {
+                            console.error("It's NOT your turn");
+                        }
+
+                        // //TODO: check if it your turn
+                        // if (player.action == 'please_bet') {
+                        //     var players = GetPlayersStartingWithSmallBlind();
+                        //     player.setBet(players[1].getBet());
+                        //     player.setAction('call');
+                        //
+                        //     if (ContinueBetting()) {
+                        //         AskNextPlayerToBet();
+                        //     } else {
+                        //         NextStepInTheGame();
+                        //     }
+                        // }
+                        //
+                        // //TODO: return that action was accepted or not.
+                        // BroadcastGameState();
+                        //TODO: gameState.in_action = -1; //TODO remove, just for testing
+
+                        //TODO move to the next player (if needed, otherwise stop & reset in_action)
+                        //TODO add timeout to slow the game
+                        //TODO retry
+                        //TODO what if call, raise is invalid, respond back to client
+                        //TODO if client doesn't respond within 5 seconds, then fold for that player. & move to next player
+
+                        //TODO gameState.in_action++ (maar als groter dan # Players, zet terug naar 0).
+
+
+                    }, 1000);
                     break;
 
                 case 'raise': //{'action': 'raise', 'data': 20}
@@ -342,16 +373,6 @@ function ProvideBoardCards(count) {
     }
 }
 
-/*
-function bla() {
-    const board = 'As Ks 4h Ad Kd';
-    const rank = rankBoard(board);
-    const name = rankDescription[rank];
-
-    console.log('%s is a %s', board, name);
-    console.log('Rank ' + rank);
-}*/
-
 // -----------------------------------------------------------
 // List of all players
 // -----------------------------------------------------------
@@ -372,6 +393,7 @@ function Player(uuid){
     this.status = "active";
     this.stack = 0;
     this.bet = 0;
+    this.last_action = ""; // small_blind, big_blind, call, raise, fold
     this.hole_cards = [];
 }
 
@@ -415,7 +437,7 @@ Player.prototype = {
             this.bet = bet;
             this.stack = this.stack - bet;
         }
-        //TODO: add bet to the pot
+        gameState.pot = gameState.pot + bet;
         gameState.largest_current_bet = bet;
     },
     /*setBet: function(bet){
@@ -435,28 +457,6 @@ Player.prototype = {
     }*/
 };
 
-// ---------------------------------------------------------
-// Routine to broadcast the list of all players to everyone
-// ---------------------------------------------------------
-/*
-function BroadcastPlayersList(){
-    var clientList = [];
-    Clients.forEach(function(client){
-        if (client.status === 'joined' || client.status === 'not-joined'){
-            clientList.push(client.getIdentity());
-        }
-    });
-
-    var message = JSON.stringify({
-        'action': 'players_list',
-        'data': clientList
-    });
-
-    Clients.forEach(function(client){
-        client.connection.sendUTF(message);
-    });
-}*/
-
 function MoveDealerToNextPlayer() {
     gameState.dealer++;
     if (gameState.dealer >= Players.length) {
@@ -465,9 +465,21 @@ function MoveDealerToNextPlayer() {
 }
 
 function ActivateGame() {
-    gameState.in_action = gameState.dealer + 1;
-    if (gameState.in_action >= Players.length) {
-        gameState.in_action = 0;
+    if (gameState.largest_current_bet === 0) {
+        let smallBlind = GetSmallBlind();
+        smallBlind.setBet(gameState.small_blind);
+        smallBlind.last_action = "small_blind";
+        let bigBlind = GetBigBlind();
+        bigBlind.setBet(gameState.big_blind);
+        bigBlind.last_action = "big_blind";
+
+        let firstPlayerToBet = GetNextPlayer(bigBlind);
+        gameState.in_action = firstPlayerToBet.id;
+        return;
+    } else {
+        let bigBlind = GetBigBlind();
+        let firstPlayerToBet = GetNextPlayer(bigBlind);
+        gameState.in_action = firstPlayerToBet.id;
     }
 }
 
@@ -558,43 +570,16 @@ function IncreaseStackForAllPlayers(credits) {
     });
 }
 
-/*function ResetActionForAllPlayers() {
-    PlayersForThisRound.forEach(function(player){
-        player.setAction('');
-    });
-}*/
-
-/*function GetPlayersStartingWithSmallBlind() {
-    var orderedPlayers = [];
-
+function ResetLastActionForAllPlayers() {
     Players.forEach(function(player){
-        if (player.joined && player.index >= SmallBlindPosition) {
-            orderedPlayers.push(player);
-        }
+        player.last_action = '';
     });
-    Players.forEach(function(player){
-        if (player.joined && player.index < SmallBlindPosition) {
-            orderedPlayers.push(player);
-        }
-    });
-    return orderedPlayers;
-}*/
-
-/*function GetPlayerCount() {
-    var joinedPlayers = Players.filter(function(player){
-        if (player.name !== '' && player.joined){
-            return true;
-        }
-        return false;
-    });
-    return joinedPlayers.length;
-}*/
+}
 
 function GetNextPlayer(player) {
     let nextId = player.id + 1;
     if (nextId >= Players.length) {
         nextId = 0;
-        //TODO: what about inactive players?
     }
 
     let nextPlayer = undefined;
@@ -628,93 +613,59 @@ function GetBigBlind() {
     return GetNextPlayer(smallBlind);
 }
 
-/*function MoveSmallBindToNextPlayer() {
-    SmallBlindPosition++;
-
-    if (SmallBlindPosition >= (GetPlayerCount() - 1)) {
-        SmallBlindPosition = 0;
-    }
-}*/
-
-/*function RemoveObserver(playerToRemove) {
-    return Observers.filter(function(player){
-        return player.getId() !== playerToRemove.getId();
-    });
-}*/
-
-/*function AskNextPlayerToBet() {
-    console.log("Ask next player to bet", CurrentPlayerForThisRound);
-    var player = PlayersForThisRound[CurrentPlayerForThisRound];
-
-    var message = JSON.stringify({
-        'action': 'please_bet',
-        'info': player.getIdentity(),
-        'community': CommunityCards
-    });
-
-    player.connection.sendUTF(message);
-    player.setAction('please_bet');
-
-    CurrentPlayerForThisRound++;
-
-    if (CurrentPlayerForThisRound >= PlayersForThisRound.length) {
-        CurrentPlayerForThisRound = 0;
-    }
-}*/
-
-/*function ContinueBetting() {
-    var continueBetting = false;
-    PlayersForThisRound.forEach(function(player){
-        if (player.action !== 'please_bet' && player.action !== '') {
-            continueBetting = true;
+function DoesEveryoneHasEqualBets() {
+    let largestBet = gameState.largest_current_bet;
+    let allEqualBets = true;
+    Players.forEach(function(player){
+        if (player.status === 'active') {
+           if ((player.last_action === 'raise' || player.last_action === 'call') && player.bet !== largestBet) {
+                allEqualBets = false;
+           }
+           if (player.last_action === '') {
+               allEqualBets = false;
+           }
+            if ((player.last_action === 'small_blind' || player.last_action === 'big_blind')) {
+                allEqualBets = false;
+            }
         }
     });
+    return allEqualBets;
+}
 
-    if (continueBetting) {
-        return true;
-    }
+function GetRankingAndBroadcast() {
+    let ranking = [];
+    let flop = gameState.board.join(' ');
+    Players.forEach(function(player){
+        let cards = player.hole_cards.join(' ') + ' ' + flop;
+        const rank = rankBoard(cards);
+        const description = rankDescription[rank];
 
-    var maxBet = 0;
-    PlayersForThisRound.forEach(function(player){
-        if (maxBet < player.bet) {
-            maxBet = player.bet;
-        }
+        console.log("Player:", player.name);
+        console.log('%s is a %s', cards, description);
+        console.log('Rank ' + rank);
+
+        ranking.push({
+            uuid: player.uuid,
+            name: player.name,
+            cards: cards,
+            description: description,
+            rank: rank
+        })
     });
-    PlayersForThisRound.forEach(function(player){
-        if (maxBet !== player.bet) {
-            continueBetting = true;
-        }
+
+    //Sort on ranking
+    ranking.sort((a, b) => (a.rank > b.rank) ? 1 : -1);
+
+    Clients.forEach(function(client){
+        let message = JSON.stringify({
+            'action': 'end_of_game',
+            'data': ranking
+        });
+        client.connection.sendUTF(message);
     });
+}
 
-    return continueBetting;
-}*/
-
-/*function NextStepInTheGame() {
-    console.log("Next step in the game");
-
-    if (CommunityCards.length == 0) {
-        console.log("FLOP");
-        ProvideCommunityCards(3);
-        CurrentPlayerForThisRound = 0;
-        ResetActionForAllPlayers();
-        AskNextPlayerToBet();
-    } else if (CommunityCards.length == 3) {
-        console.log("TURN");
-        ProvideCommunityCards(1);
-        CurrentPlayerForThisRound = 0;
-        ResetActionForAllPlayers();
-        AskNextPlayerToBet();
-    } else if (CommunityCards.length == 4) {
-        console.log("RIVER");
-        ProvideCommunityCards(1);
-        CurrentPlayerForThisRound = 0;
-        ResetActionForAllPlayers();
-        AskNextPlayerToBet();
-    } else if (CommunityCards.length == 5) {
-        //TODO: end of the game: determine score and collect bets
-
-        console.log("END of game");
-
-        ResetActionForAllPlayers();
-    }
-}*/
+function GetNewGameId() {
+    return Math.random().toString(36).substr(2, 9)
+        + Math.random().toString(36).substr(2, 9);
+}

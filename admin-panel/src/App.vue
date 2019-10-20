@@ -14,12 +14,14 @@
             </div>
           </div>
 
-          <div v-if="player.bet > 0" class="bet">{{ player.bet }}</div>
+          <div v-if="player.bet > 0" class="bet">{{ player.bet }} - {{ player.last_action }}</div>
 
         </div>
       </div>
 
       <div class="pot" v-if="connection.connected">Pot: {{ gamestate.pot }}</div>
+
+      <div class="larget-bet" v-if="connection.connected">Largest bet: {{ gamestate.largest_current_bet }}</div>
 
       <div class="board row">
         <div class="playing-card" v-for="card in gamestate.board">
@@ -34,8 +36,15 @@
     <br /><br />
     <button v-on:click="startGame" v-if="connection.joined">Start game</button>
     <button v-on:click="startRound" v-if="connection.joined">Start round</button>
-    <button v-on:click="nextCardsAndBet" v-if="connection.joined && gamestate.dealer !== -1 && gamestate.in_action === -1 && gamestate.board.length < 5">Next cards & bet</button>
+    <button v-on:click="nextCardsAndBet" v-if="connection.joined && gamestate.dealer !== -1 && gamestate.in_action === -1 && gamestate.board.length < 5">Next move & start bet</button>
+    <button v-on:click="nextCardsAndBet" v-if="connection.joined && gamestate.dealer !== -1 && gamestate.in_action === -1 && gamestate.board.length === 5 && gamestate.ranking.length === 0">Get ranking & assign pot</button>
 
+    <div class="ranking" v-if="gamestate.ranking.length > 0">
+      <h3>Ranking</h3>
+      <ol v-for="rank in gamestate.ranking">
+        <li>{{ rank.name }} - {{ rank.description }} ({{ rank.rank }})</li>
+      </ol>
+    </div>
   </div>
 </template>
 
@@ -47,8 +56,10 @@
 
   let connection = {
       connected: false,
-      joined: false
+      joined: false,
   };
+
+  gamestate.ranking = [];
 
   Vue.use(VueNativeSock, 'ws://localhost:8081', {
       protocol: 'echo-protocol',
@@ -110,6 +121,7 @@
                     gamestate.pot = newGameState.pot;
                     gamestate.minimum_raise = newGameState.minimum_raise;
                     gamestate.board = newGameState.board;
+                    gamestate.ranking = [];
 
                     break;
                 case "connected":
@@ -123,6 +135,10 @@
                 case "unjoined":
                     console.log("Unjoined");
                     connection.joined = false;
+                    break;
+                case "end_of_game":
+                    console.log("End of game");
+                    gamestate.ranking = message.data;
                     break;
                 default:
                     console.log(message);
