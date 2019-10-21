@@ -203,14 +203,13 @@ wsServer.on('request', function(request) {
                         ActivateGame(); //this will trigger the first player to play
                         BroadcastGameState();
                     } else if (gameState.board.length == 5) {
-                        //TODO: end of the game: determine score and collect bets
-                        //TODO: build ranking
-                        //TODO send end result (ranking) object over websockets to all clients.
-
                         gameState.in_action = -1;
 
                         console.log("END of game");
                         GetRankingAndBroadcast();
+                        //TODO: end of the game: determine score and collect bets
+                        //TODO: build ranking
+                        //TODO send end result (ranking) object over websockets to all clients.
                     }
                     break;
 
@@ -398,37 +397,6 @@ function Player(uuid){
 }
 
 Player.prototype = {
-    /*getId: function(){
-        return this.id;
-    },
-    getIdentity: function(){
-        return {name: this.name, id: this.id, credits: this.credits, action: this.action};
-    },
-    getPublicGameState: function(){
-        return {
-            name: this.name,
-            id: this.id,
-            credits: this.credits,
-            bet: this.bet
-        };
-    },
-    getPrivateGameState: function(){
-        return {
-            name: this.name,
-            id: this.id,
-            credits: this.credits,
-            bet: this.bet,
-
-            hand: this.hand,
-            action: this.action
-        };
-    },
-    join: function(join){
-        this.joined = join;
-    },
-    setIndex: function(index){
-        this.index = index;
-    },*/
     addHoleCards: function(hand){
         this.hole_cards.push(hand);
     },
@@ -439,22 +407,7 @@ Player.prototype = {
         }
         gameState.pot = gameState.pot + bet;
         gameState.largest_current_bet = bet;
-    },
-    /*setBet: function(bet){
-        if (this.credits >= bet && bet > 0) {
-            this.bet = bet;
-            this.credits = this.credits - bet;
-        }
-    },
-    setAction: function(action){
-        this.action = action;
-    },
-    getBet: function(){
-        return this.bet;
-    },
-    increaseCredits: function(credits){
-        this.credits = this.credits + credits;
-    }*/
+    }
 };
 
 function MoveDealerToNextPlayer() {
