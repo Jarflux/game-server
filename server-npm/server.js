@@ -2,16 +2,16 @@
 var WebSocketServer = require('websocket').server;
 var http = require('http');
 const crypto = require('crypto');
-const { rankBoard, rankDescription } = require('phe')
+const {rankBoard, rankDescription} = require('phe')
 
 let gameState = require('./initial-game-state.json');
 
-var server = http.createServer(function(request, response) {
+var server = http.createServer(function (request, response) {
     console.log((new Date()) + ' Received request for ' + request.url);
     response.writeHead(404);
     response.end();
 });
-server.listen(8081, function() {
+server.listen(8081, function () {
     console.log((new Date()) + ' Server is listening on port 8080');
 });
 
@@ -56,7 +56,7 @@ wsServer.on('upgrade', function (req, socket) {
         .digest('base64');
 }*/
 
-wsServer.on('request', function(request) {
+wsServer.on('request', function (request) {
     if (!originIsAllowed(request.origin)) {
         // Make sure we only accept requests from an allowed origin
         request.reject();
@@ -74,7 +74,7 @@ wsServer.on('request', function(request) {
 
     let player = new Player(request.key);
 
-    connection.on('message', function(data) {
+    connection.on('message', function (data) {
         if (data.type === 'utf8') {
             console.log('Received Message: ' + data.utf8Data);
 
@@ -158,7 +158,7 @@ wsServer.on('request', function(request) {
                     NewDeck();
                     console.log("Cards", Cards);
 
-                    //TODO what if still bets are open when starting new round? give back the money?
+                    //TODO what if still bets are open when starting new round? give back the money?   // Should not be the case
 
                     EraseHoleCardsForAllPlayers();
                     gameState.board = [];
@@ -172,7 +172,7 @@ wsServer.on('request', function(request) {
 
                     //TODO also deduct the bet from the stack (or only at the end?)
 
-                    //TODO: this will give the first turn to the small blind (first turn should be for player after big blind
+                    //TODO: this will give the first turn to player under the gun (first turn should be for player after big blind)
 
                     BroadcastGameState();
                     break;
@@ -186,18 +186,21 @@ wsServer.on('request', function(request) {
                         BroadcastGameState();
                     } else if (gameState.board.length == 0) {
                         console.log("FLOP");
+                        //TODO Burn 1 card before Flop
                         ProvideBoardCards(3);
                         ResetLastActionForAllPlayers();
                         ActivateGame(); //this will trigger the first player to play
                         BroadcastGameState();
                     } else if (gameState.board.length == 3) {
                         console.log("TURN");
+                        //TODO Burn 1 card before Turn
                         ProvideBoardCards(1);
                         ResetLastActionForAllPlayers();
                         ActivateGame(); //this will trigger the first player to play
                         BroadcastGameState();
                     } else if (gameState.board.length == 4) {
                         console.log("RIVER");
+                        //TODO Burn 1 card before River
                         ProvideBoardCards(1);
                         ResetLastActionForAllPlayers();
                         ActivateGame(); //this will trigger the first player to play
@@ -262,11 +265,13 @@ wsServer.on('request', function(request) {
 
                         //TODO gameState.in_action++ (maar als groter dan # Players, zet terug naar 0).
 
-
                     }, 1000);
                     break;
 
                 case 'raise': //{'action': 'raise', 'data': 20}
+
+                    // TODO: if a player is already All-in move the exess chips into a extra pot and add to the eligeble players for pot
+
                     // //TODO: check if it your turn
                     // if (player.action == 'please_bet') {
                     //     //TODO: check if bet is allowed.
@@ -285,6 +290,8 @@ wsServer.on('request', function(request) {
                     break;
 
                 case 'fold': //{'action': 'fold'}
+
+                    //
                     // //TODO: check if it your turn
                     //
                     // if (player.action == 'please_bet') {
@@ -296,14 +303,14 @@ wsServer.on('request', function(request) {
                     //         NextStepInTheGame();
                     //     }
                     // }
-                    //
+                    // //TODO: check if this was the second to last player to fold, in that case only 1 player is left and will automatically win
                     // //TODO: return that action was accepted or not.
                     // BroadcastGameState();
                     break;
             }
         }
     });
-    connection.on('close', function(reasonCode, description) {
+    connection.on('close', function (reasonCode, description) {
         console.log('Client disconnected: ', client.uuid);
 
         player.status = "inactive";
@@ -351,13 +358,13 @@ function ShuffleDeck() {
 }
 
 function EraseHoleCardsForAllPlayers() {
-    Players.forEach(function(player){
+    Players.forEach(function (player) {
         player.hole_cards = [];
     });
 }
 
 function ProvideOneCardToAllPlayers() {
-    Players.forEach(function(player){
+    Players.forEach(function (player) {
         if (player.hole_cards.length < 2) {
             let card = Cards.shift();
             player.addHoleCards(card);
@@ -378,14 +385,14 @@ function ProvideBoardCards(count) {
 let Clients = [];
 let Players = [];
 
-function Client(uuid, connection){
+function Client(uuid, connection) {
     this.uuid = uuid;
     this.name = '';
     this.connection = connection;
     this.status = 'not-joined'; //not-joined, joined, observer, admin
 }
 
-function Player(uuid){
+function Player(uuid) {
     this.id = -1;
     this.uuid = uuid;
     this.name = "";
@@ -397,11 +404,12 @@ function Player(uuid){
 }
 
 Player.prototype = {
-    addHoleCards: function(hand){
+    addHoleCards: function (hand) {
         this.hole_cards.push(hand);
     },
-    setBet: function(bet){
+    setBet: function (bet) {
         if (this.stack >= bet && bet > 0) {
+            //TODO If player already posted a small/big blind dont subtract the complete bet
             this.bet = bet;
             this.stack = this.stack - bet;
         }
@@ -436,14 +444,14 @@ function ActivateGame() {
     }
 }
 
-function BroadcastGameState(){
+function BroadcastGameState() {
     gameState.players = [];
-    Players.forEach(function(player){
+    Players.forEach(function (player) {
         gameState.players.push(player);
     });
 
     //share full game view with observers & admins
-    Clients.forEach(function(client){
+    Clients.forEach(function (client) {
         if (client.status === 'admin' || client.status === 'observer') {
             let message = JSON.stringify({
                 'action': 'game_state',
@@ -454,11 +462,11 @@ function BroadcastGameState(){
     });
 
     //share private game view to players
-    Clients.forEach(function(client){
+    Clients.forEach(function (client) {
         if (client.status === 'joined') {
             gameState.players = [];
 
-            Players.forEach(function(player){
+            Players.forEach(function (player) {
                 if (client.uuid === player.uuid) {
                     gameState.players.push({
                         uuid: player.uuid,
@@ -494,15 +502,14 @@ function BroadcastGameState(){
     //TODO: for every broadcast, save the game state in a file.
 }
 
-
 function RemovePlayer(playerToRemove) {
-    Players = Players.filter(function(player){
+    Players = Players.filter(function (player) {
         return player.uuid !== playerToRemove.uuid;
     });
 }
 
 function RemoveClient(clientToRemove) {
-    Clients = Clients.filter(function(client){
+    Clients = Clients.filter(function (client) {
         return client.uuid !== clientToRemove.uuid;
     });
 }
@@ -511,20 +518,20 @@ function ShufflePlayers() {
     shuffle(Players);
 
     let index = 0;
-    Players.forEach(function(player){
+    Players.forEach(function (player) {
         player.id = index;
         index++;
     });
 }
 
 function IncreaseStackForAllPlayers(credits) {
-    Players.forEach(function(player){
+    Players.forEach(function (player) {
         player.stack = player.stack + credits;
     });
 }
 
 function ResetLastActionForAllPlayers() {
-    Players.forEach(function(player){
+    Players.forEach(function (player) {
         player.last_action = '';
     });
 }
@@ -536,7 +543,7 @@ function GetNextPlayer(player) {
     }
 
     let nextPlayer = undefined;
-    Players.forEach(function(currentPlayer){
+    Players.forEach(function (currentPlayer) {
         if (nextPlayer === undefined && currentPlayer.id === nextId) {
             nextPlayer = currentPlayer;
         }
@@ -547,7 +554,7 @@ function GetNextPlayer(player) {
 
 function GetDealer() {
     let dealer = undefined;
-    Players.forEach(function(player){
+    Players.forEach(function (player) {
         if (dealer === undefined && player.id === gameState.dealer) {
             dealer = player;
         }
@@ -569,14 +576,14 @@ function GetBigBlind() {
 function DoesEveryoneHasEqualBets() {
     let largestBet = gameState.largest_current_bet;
     let allEqualBets = true;
-    Players.forEach(function(player){
+    Players.forEach(function (player) {
         if (player.status === 'active') {
-           if ((player.last_action === 'raise' || player.last_action === 'call') && player.bet !== largestBet) {
+            if ((player.last_action === 'raise' || player.last_action === 'call') && player.bet !== largestBet) {
                 allEqualBets = false;
-           }
-           if (player.last_action === '') {
-               allEqualBets = false;
-           }
+            }
+            if (player.last_action === '') {
+                allEqualBets = false;
+            }
             if ((player.last_action === 'small_blind' || player.last_action === 'big_blind')) {
                 allEqualBets = false;
             }
@@ -588,7 +595,7 @@ function DoesEveryoneHasEqualBets() {
 function GetRankingAndBroadcast() {
     let ranking = [];
     let flop = gameState.board.join(' ');
-    Players.forEach(function(player){
+    Players.forEach(function (player) {
         let cards = player.hole_cards.join(' ') + ' ' + flop;
         const rank = rankBoard(cards);
         const description = rankDescription[rank];
@@ -609,7 +616,7 @@ function GetRankingAndBroadcast() {
     //Sort on ranking
     ranking.sort((a, b) => (a.rank > b.rank) ? 1 : -1);
 
-    Clients.forEach(function(client){
+    Clients.forEach(function (client) {
         let message = JSON.stringify({
             'action': 'end_of_game',
             'data': ranking
@@ -621,4 +628,22 @@ function GetRankingAndBroadcast() {
 function GetNewGameId() {
     return Math.random().toString(36).substr(2, 9)
         + Math.random().toString(36).substr(2, 9);
+}
+
+//TODO Reimplement after adapting new pots json structure in the gamestate
+function endHand() { // Hand is poker lingo for a game
+
+    // If only 1 person left in the hand, he/she wins without a showdown
+    if( Players.filter(player => player.status === 'active').length === 1){
+        let player = Players.filter(player => player.status === 'active')[0];
+        player.stack += gameState.pot;
+    }else{  // If more than 2 people are active
+        let ranking = [] // getWinners();
+        // For each winner
+            // for each pot take eligable winners
+                // determine if it is a split pot
+                // award correct share of pot to winner(s)
+    }
+
+    // TODO Reset gamestate: Clear all bets, empty pot, remove hole cards, clean board,
 }
