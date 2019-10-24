@@ -1,17 +1,21 @@
 #!/usr/bin/env node
 let WebSocketClient = require('websocket').client;
 
-let client = new WebSocketClient();
+let client1 = new WebSocketClient();
 
 let UUID = '';
 
-client.on('connectFailed', function(error) {
+client1.on('connectFailed', function(error) {
     console.log('Connect Error: ' + error.toString());
 });
 
-client.on('connect', function(connection) {
+client1.on('connect', function(connection) {
     console.log('WebSocket Client Connected');
-    const data = { action:'join', data: 'Client ' + Math.floor(Math.random()*100) };
+    const data = {
+        action:'observe',
+        data: 'Obsy', //'Client ' + Math.floor(Math.random()*100)
+        api_key: 'un$5lhdgdfgg:Tkrru(T&6KsMQuKw1_d-2{'
+    };
     const json = JSON.stringify(data);
     connection.sendUTF(json);
 
@@ -22,9 +26,10 @@ client.on('connect', function(connection) {
     connection.on('close', function() {
         console.log('echo-protocol Connection Closed');
     });
+
     connection.on('message', function(data) {
         if (data.type === 'utf8') {
-            console.log("Received: '" + data.utf8Data + "'");
+            //console.log("Received: '" + data.utf8Data + "'");
 
             var message = JSON.parse(data.utf8Data);
             switch (message.action) {
@@ -33,19 +38,22 @@ client.on('connect', function(connection) {
                     console.log("UUID", UUID);
                     break;
 
+                case 'success':
+                    console.log("SUCCESS", message.data);
+                    break;
+
+                case 'error':
+                    console.log("ERROR", message.data);
+                    break;
+
                 case 'game_state':
                     let gameState = message.data;
                     console.log("Game state", gameState);
+                    break;
 
-                    gameState.players.forEach(function(player){
-                        if (UUID === player.uuid && player.id === gameState.in_action) {
-                            console.log("My turn");
-
-                            //Return with a call, no matter what the input is
-                            connection.sendUTF(JSON.stringify({ action:'call'}));
-                            console.log("Responded with:", "CALL");
-                        }
-                    });
+                case 'client_list':
+                    let clientList = message.data;
+                    console.log("Client list", clientList);
 
                     break;
             }
@@ -53,4 +61,4 @@ client.on('connect', function(connection) {
     });
 });
 
-client.connect('ws://localhost:8081/', 'echo-protocol');
+client1.connect('ws://localhost:8081/', 'echo-protocol');

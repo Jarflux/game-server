@@ -70,73 +70,141 @@ wsServer.on('request', function(request) {
     Clients.push(client);
     connection.sendUTF(JSON.stringify({action: 'connected', data: client.uuid}));
 
-    //TODO, also broadcast list of clients
+    BroadcastClientList();
 
     let player = new Player(request.key);
 
     connection.on('message', function(data) {
         if (data.type === 'utf8') {
-            console.log('Received Message: ' + data.utf8Data);
+            //console.log('Received Message: ' + data.utf8Data);
 
             var message = JSON.parse(data.utf8Data);
             switch (message.action) {
 
                 case 'join':
-                    client.status = 'joined';
-                    player.name = message.data;
-                    client.name = message.data;
+                    if (isValidPlayerApiKey(message.api_key)) {
+                        client.status = 'joined';
+                        player.name = message.data;
+                        client.name = message.data;
 
-                    player.id = Players.length;
-                    Players.push(player);
+                        player.api_key = message.api_key;
+                        client.api_key = message.api_key;
 
-                    //TODO validation + max 6 people + only known bots
-                    console.log("Player joined the game:", client.name);
+                        console.log("Player joined the game:", client.name);
 
-                    BroadcastGameState();
+                        player.id = Players.length;
+                        AddOrReplacePlayer(player);
+
+                        client.connection.sendUTF(JSON.stringify({
+                            'action': 'success',
+                            'data': 'joined'
+                        }));
+
+                        BroadcastGameState();
+                        BroadcastClientList();
+                    } else {
+                        console.log("Player had invalid key", client.uuid);
+                        client.connection.sendUTF(JSON.stringify({
+                            'action': 'error',
+                            'data': 'invalid-key'
+                        }));
+                    }
                     break;
 
                 case 'unjoin':
-                    client.status = 'not-joined';
-                    console.log(client.name + " unjoined the game!");
+                    if (isValidPlayerApiKey(message.api_key)) {
+                        client.status = 'not-joined';
+                        console.log(client.name + " unjoined the game!");
 
-                    client.connection.sendUTF(JSON.stringify({
-                        'action': 'unjoined',
-                        'data': ''
-                    }));
+                        client.connection.sendUTF(JSON.stringify({
+                            'action': 'success',
+                            'data': 'unjoined'
+                        }));
 
-                    RemovePlayer(player);
+                        RemovePlayer(player); //TODO: not when playing a game, not allowed to step out???
 
-                    BroadcastGameState();
+                        BroadcastGameState();
+                    } else if (isValidObserverApiKey(message.api_key)) {
+                        client.status = 'not-joined';
+                        console.log(client.name + " unjoined the game!");
+
+                        client.connection.sendUTF(JSON.stringify({
+                            'action': 'success',
+                            'data': 'unjoined'
+                        }));
+                    } else if (isValidAdminApiKey(message.api_key)) {
+                        client.status = 'not-joined';
+                        console.log(client.name + " unjoined the game!");
+
+                        client.connection.sendUTF(JSON.stringify({
+                            'action': 'success',
+                            'data': 'unjoined'
+                        }));
+                    } else {
+                        console.log("Unjoining with an invalid key", client.uuid);
+                        client.connection.sendUTF(JSON.stringify({
+                            'action': 'error',
+                            'data': 'invalid-key'
+                        }));
+                    }
+
+                    BroadcastClientList();
+
                     break;
 
                 case 'observe':
-                    client.status = 'observer';
-                    client.name = message.data;
-                    console.log(client.name + " is observing the game!");
+                    if (isValidObserverApiKey(message.api_key)) {
+                        client.status = 'observer';
+                        client.name = message.data;
 
-                    //TODO only allow if API key is valid
+                        client.api_key = message.api_key;
 
-                    RemovePlayer(player);
+                        console.log("Observer joined the game:", client.name);
+                        client.connection.sendUTF(JSON.stringify({
+                            'action': 'success',
+                            'data': 'observing'
+                        }));
 
-                    BroadcastGameState();
+                        BroadcastGameState();
+                        BroadcastClientList();
+                    } else {
+                        console.log("Observer had invalid key", client.uuid);
+                        client.connection.sendUTF(JSON.stringify({
+                            'action': 'error',
+                            'data': 'invalid-key'
+                        }));
+                    }
+
                     break;
 
                 case 'admin':
-                    client.status = 'admin';
-                    client.name = message.data;
-                    console.log(client.name + " is administrator for the game!");
+                    if (isValidAdminApiKey(message.api_key)) {
+                        client.status = 'admin';
+                        client.name = message.data;
+                        console.log(client.name + " is administrator for the game!");
 
-                    //TODO only allow if API key is valid
+                        client.api_key = message.api_key;
 
-                    client.connection.sendUTF(JSON.stringify({
-                        'action': 'joined',
-                        'data': ''
-                    }));
-                    BroadcastGameState();
+                        client.connection.sendUTF(JSON.stringify({
+                            'action': 'success',
+                            'data': 'joined'
+                        }));
+                        BroadcastGameState();
+                        BroadcastClientList();
+                    } else {
+                        console.log("Client to join as admin, but had invalid key", client.uuid);
+                        client.connection.sendUTF(JSON.stringify({
+                            'action': 'error',
+                            'data': 'invalid-key'
+                        }));
+                    }
                     break;
 
                 case 'new_game':
                     //TODO: Only initiated by Admin Panel itself
+                    if (client.status === 'admin') {
+                        //TODO
+                    }
                     ShufflePlayers();
                     IncreaseStackForAllPlayers(1000);
 
@@ -309,12 +377,47 @@ wsServer.on('request', function(request) {
         player.status = "inactive";
         RemoveClient(client);
 
-        //TODO: fix if client 2 disconnects and connects again, that the same same player & client is used again.
-
         BroadcastGameState();
-        //TODO, also broadcast list of clients
+        BroadcastClientList();
     });
 });
+// -----------------------------------------------------------
+// API keys
+// -----------------------------------------------------------
+
+let VALID_PLAYER_API_KEYS = [
+    'Y2}/RUVw5s?F+vq3qO(n8uXou&3_GL',
+    'YDs)giYcQ0O|J=bhg:Tkrru(T&6K9]',
+    'wjAv9bvZl)"IbB`1OI^%ZJa+SAXA%$',
+    'un$5l>81ff;K~ia.C#usMQuKw1_d-2{',
+    's3olopRDT?8L6Qq3#3g52}|6pgZ.s^',
+    '-KffA7u;~dC.J[r|3-ZPkf1fZXhY^Gs',
+    '[VpBeOptl_#hY`h3Jo,|?NCM8qYa9L'
+];
+
+let VALID_OBSERVER_API_KEYS = [
+    'Y2}/Rhg:Tkrru(T&6K(n8uXojdhdu&3_GL',
+    'YDs)giYcQ0O|J=bhg:Tkrru(T&dfgfdg6K9]',
+    'wjAv9bvZdgfglhg:Tkrru(T&6KZJa+SAXA%$',
+    'un$5lhdgdfgg:Tkrru(T&6KsMQuKw1_d-2{',
+    's3olopRDThg:Tkrru(T&6fdgfKpgZ.s^',
+    '-KffA7hg:Tkrru(T&6K-ZPfdgfkf1fY^Gs',
+    '[VpBeOptl_#hg:Tkrru(Tdfgfg&6KYa9L'
+];
+
+let VALID_ADMIN_API_KEY = 'R3a8FibuDreX"%G)kvn17>/}8;,#E1OoAAU{Dx?l(###XAm=4QL2lLTUlmj-{}A';
+
+function isValidPlayerApiKey(apiKey) {
+    return VALID_PLAYER_API_KEYS.indexOf(apiKey) >= 0;
+}
+
+function isValidObserverApiKey(apiKey) {
+    return VALID_OBSERVER_API_KEYS.indexOf(apiKey) >= 0;
+}
+
+function isValidAdminApiKey(apiKey) {
+    return VALID_ADMIN_API_KEY === apiKey;
+}
 
 // -----------------------------------------------------------
 // utils
@@ -383,6 +486,7 @@ function Client(uuid, connection){
     this.name = '';
     this.connection = connection;
     this.status = 'not-joined'; //not-joined, joined, observer, admin
+    this.api_key = '';
 }
 
 function Player(uuid){
@@ -394,6 +498,7 @@ function Player(uuid){
     this.bet = 0;
     this.last_action = ""; // small_blind, big_blind, call, raise, fold
     this.hole_cards = [];
+    this.api_key = '';
 }
 
 Player.prototype = {
@@ -409,6 +514,28 @@ Player.prototype = {
         gameState.largest_current_bet = bet;
     }
 };
+
+//when joining (replace or add to Players list)
+function AddOrReplacePlayer(playerToAdd) {
+    let newPlayerList = [];
+
+    let addedPlayer = false;
+    Players.forEach(function(player){
+        if (player.api_key === playerToAdd.api_key) {
+            console.log("Player rejoined the game");
+            newPlayerList.push(playerToAdd);
+            addedPlayer = true;
+        } else {
+            newPlayerList.push(player);
+        }
+    });
+
+    if (!addedPlayer) {
+        newPlayerList.push(playerToAdd);
+    }
+
+    Players = newPlayerList;
+}
 
 function MoveDealerToNextPlayer() {
     gameState.dealer++;
@@ -439,7 +566,7 @@ function ActivateGame() {
 function BroadcastGameState(){
     gameState.players = [];
     Players.forEach(function(player){
-        gameState.players.push(player);
+        gameState.players.push(player); //TODO This is exposing the api_key. should it not be stored on player? but only client?
     });
 
     //share full game view with observers & admins
@@ -467,7 +594,10 @@ function BroadcastGameState(){
                         stack: player.stack,
                         bet: player.bet,
 
-                        hole_cards: player.hole_cards
+                        //this is you
+                        hole_cards: player.hole_cards,
+                        api_key: player.api_key,
+                        your_turn: gameState.in_action === player.id && gameState.in_action !== -1
                     });
                 } else {
                     gameState.players.push({
@@ -494,8 +624,32 @@ function BroadcastGameState(){
     //TODO: for every broadcast, save the game state in a file.
 }
 
+function BroadcastClientList(){
+    let clientList = [];
+    Clients.forEach(function(client){
+        clientList.push({
+            uuid: client.uuid,
+            name: client.name,
+            status: client.status
+        });
+    });
+
+    //share full game view with observers & admins
+    Clients.forEach(function(client){
+        if (client.status === 'admin' || client.status === 'observer') {
+            let message = JSON.stringify({
+                'action': 'client_list',
+                'data': clientList
+            });
+            client.connection.sendUTF(message);
+        }
+    });
+}
+
 
 function RemovePlayer(playerToRemove) {
+    //TODO: don't remove when playing, then user always folds
+    //When user sends unjoin
     Players = Players.filter(function(player){
         return player.uuid !== playerToRemove.uuid;
     });

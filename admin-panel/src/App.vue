@@ -82,7 +82,7 @@
     },
     methods: {
         join: function(val) {
-            const data = { action:'admin', data: 'Admin Panel' };
+            const data = { action:'admin', data: 'Admin Panel', api_key: 'R3a8FibuDreX"%G)kvn17>/}8;,#E1OoAAU{Dx?l(###XAm=4QL2lLTUlmj-{}A' };
             this.$socket.sendObj(data);
         },
         unjoin: function(val) {
