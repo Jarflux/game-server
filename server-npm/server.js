@@ -201,7 +201,7 @@ wsServer.on('request', function (request) {
                     break;
 
                 case 'new_game':
-                    if (client.status === 'admin') {
+                    if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
                         ShufflePlayers();
                         IncreaseStackForAllPlayers(1000);
 
@@ -222,7 +222,7 @@ wsServer.on('request', function (request) {
                     break;
 
                 case 'new_round':
-                    if (client.status === 'admin') {
+                    if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
                         NewDeck();
                         console.log("Cards", Cards);
 
@@ -247,39 +247,42 @@ wsServer.on('request', function (request) {
                     break;
 
                 case 'next_cards_and_bet':
-                    console.log("Next step in the game");
+                    if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
+                        console.log("Next step in the game");
 
-                    if (gameState.largest_current_bet === 0) {
-                        //first round, no Board Cards yet, just bet
-                        ActivateGame(); //this will trigger the first player to play
-                        BroadcastGameState();
-                    } else if (gameState.board.length == 0) {
-                        console.log("FLOP");
-                        //TODO Burn 1 card before Flop
-                        ProvideBoardCards(3);
-                        ResetLastActionForAllPlayers();
-                        ActivateGame(); //this will trigger the first player to play
-                        BroadcastGameState();
-                    } else if (gameState.board.length == 3) {
-                        console.log("TURN");
-                        //TODO Burn 1 card before Turn
-                        ProvideBoardCards(1);
-                        ResetLastActionForAllPlayers();
-                        ActivateGame(); //this will trigger the first player to play
-                        BroadcastGameState();
-                    } else if (gameState.board.length == 4) {
-                        console.log("RIVER");
-                        //TODO Burn 1 card before River
-                        ProvideBoardCards(1);
-                        ResetLastActionForAllPlayers();
-                        ActivateGame(); //this will trigger the first player to play
-                        BroadcastGameState();
-                    } else if (gameState.board.length == 5) {
-                        gameState.in_action = -1;
+                        if (gameState.largest_current_bet === 0) {
+                            //first round, no Board Cards yet, just bet
+                            ActivateGame(); //this will trigger the first player to play
+                            BroadcastGameState();
+                        } else if (gameState.board.length == 0) {
+                            console.log("FLOP");
+                            //TODO Burn 1 card before Flop
+                            ProvideBoardCards(3);
+                            ResetLastActionForAllPlayers();
+                            ActivateGame(); //this will trigger the first player to play
+                            BroadcastGameState();
+                        } else if (gameState.board.length == 3) {
+                            console.log("TURN");
+                            //TODO Burn 1 card before Turn
+                            ProvideBoardCards(1);
+                            ResetLastActionForAllPlayers();
+                            ActivateGame(); //this will trigger the first player to play
+                            BroadcastGameState();
+                        } else if (gameState.board.length == 4) {
+                            console.log("RIVER");
+                            //TODO Burn 1 card before River
+                            ProvideBoardCards(1);
+                            ResetLastActionForAllPlayers();
+                            ActivateGame(); //this will trigger the first player to play
+                            BroadcastGameState();
+                        } else if (gameState.board.length == 5) {
+                            gameState.in_action = -1;
 
-                        console.log("END of game");
-                        GetRankingAndBroadcast();
+                            console.log("END of game");
+                            GetRankingAndBroadcast();
+                        }
                     }
+
                     break;
 
                 case 'call': //{'action': 'call'}
@@ -579,6 +582,7 @@ function BroadcastGameState() {
             id: player.id,
             stack: player.stack,
             bet: player.bet,
+            last_action: player.last_action,
 
             //private info
             hole_cards: player.hole_cards,
@@ -610,6 +614,7 @@ function BroadcastGameState() {
                         id: player.id,
                         stack: player.stack,
                         bet: player.bet,
+                        last_action: player.last_action,
 
                         //this is you
                         hole_cards: player.hole_cards,
@@ -622,7 +627,8 @@ function BroadcastGameState() {
                         name: player.name,
                         id: player.id,
                         stack: player.stack,
-                        bet: player.bet
+                        bet: player.bet,
+                        last_action: player.last_action,
                     });
                 }
             });
