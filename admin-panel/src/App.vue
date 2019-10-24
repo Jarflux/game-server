@@ -54,6 +54,8 @@
   import gamestate from './json/game-state.json'
   import VueNativeSock from 'vue-native-websocket'
 
+  const API_KEY = 'R3a8FibuDreX"%G)kvn17>/}8;,#E1OoAAU{Dx?l(###XAm=4QL2lLTUlmj-{}A';
+
   let connection = {
       connected: false,
       joined: false,
@@ -82,23 +84,23 @@
     },
     methods: {
         join: function(val) {
-            const data = { action:'admin', data: 'Admin Panel', api_key: 'R3a8FibuDreX"%G)kvn17>/}8;,#E1OoAAU{Dx?l(###XAm=4QL2lLTUlmj-{}A' };
+            const data = { action:'admin', data: 'Admin Panel', api_key: API_KEY };
             this.$socket.sendObj(data);
         },
         unjoin: function(val) {
-            const data = { action:'unjoin', data: 'Admin Panel' };
+            const data = { action:'unjoin', data: 'Admin Panel', api_key: API_KEY };
             this.$socket.sendObj(data);
         },
         startGame: function(val) {
-            const data = { action:'new_game' };
+            const data = { action:'new_game', api_key: API_KEY };
             this.$socket.sendObj(data);
         },
         startRound: function(val) {
-            const data = { action:'new_round' };
+            const data = { action:'new_round', api_key: API_KEY };
             this.$socket.sendObj(data);
         },
         nextCardsAndBet: function(val) {
-            const data = { action:'next_cards_and_bet' };
+            const data = { action:'next_cards_and_bet', api_key: API_KEY };
             this.$socket.sendObj(data);
         }
     },
@@ -128,13 +130,19 @@
                    console.log("Connected");
                    connection.connected = true;
                    break;
-                case "joined":
-                    console.log("Joined");
-                    connection.joined = true;
+                case "success":
+                    if (message.data === 'joined') {
+                        console.log("Joined");
+                        connection.joined = true;
+                    } else if (message.data === 'unjoined') {
+                        console.log("Unjoinned");
+                        connection.joined = false;
+                    }
                     break;
-                case "unjoined":
-                    console.log("Unjoined");
-                    connection.joined = false;
+                case "error":
+                    if (message.data === 'invalid-key') {
+                        console.error("Invalid KEY");
+                    }
                     break;
                 case "end_of_game":
                     console.log("End of game");

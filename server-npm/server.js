@@ -121,7 +121,7 @@ wsServer.on('request', function (request) {
                             'data': 'unjoined'
                         }));
 
-                        RemovePlayer(player); //TODO: not when playing a game, not allowed to step out???
+                        RemovePlayer(player);
 
                         BroadcastGameState();
                     } else if (isValidObserverApiKey(message.api_key)) {
@@ -162,7 +162,7 @@ wsServer.on('request', function (request) {
                         console.log("Observer joined the game:", client.name);
                         client.connection.sendUTF(JSON.stringify({
                             'action': 'success',
-                            'data': 'observing'
+                            'data': 'joined'
                         }));
 
                         BroadcastGameState();
@@ -201,48 +201,49 @@ wsServer.on('request', function (request) {
                     break;
 
                 case 'new_game':
-                    //TODO: Only initiated by Admin Panel itself
                     if (client.status === 'admin') {
-                        //TODO
+                        ShufflePlayers();
+                        IncreaseStackForAllPlayers(1000);
+
+                        gameState.game_id = GetNewGameId();
+
+                        gameState.dealer = -1;
+                        gameState.in_action = -1;
+                        //TODO reset other fields in the gamestate?
+
+                        EraseHoleCardsForAllPlayers();
+                        gameState.board = [];
+
+                        //TODO what if still bets are open when starting new game? give back the money?
+
+                        BroadcastGameState();
                     }
-                    ShufflePlayers();
-                    IncreaseStackForAllPlayers(1000);
 
-                    gameState.game_id = GetNewGameId();
-
-                    gameState.dealer = -1;
-                    gameState.in_action = -1;
-                    //TODO reset other fields in the gamestate?
-
-                    EraseHoleCardsForAllPlayers();
-                    gameState.board = [];
-
-                    //TODO what if still bets are open when starting new game? give back the money?
-
-                    BroadcastGameState();
                     break;
 
                 case 'new_round':
-                    NewDeck();
-                    console.log("Cards", Cards);
+                    if (client.status === 'admin') {
+                        NewDeck();
+                        console.log("Cards", Cards);
 
-                    //TODO what if still bets are open when starting new round? give back the money?   // Should not be the case
+                        //TODO what if still bets are open when starting new round? give back the money?   // Should not be the case
 
-                    EraseHoleCardsForAllPlayers();
-                    gameState.board = [];
+                        EraseHoleCardsForAllPlayers();
+                        gameState.board = [];
 
-                    MoveDealerToNextPlayer();
-                    gameState.in_action = -1;
-                    gameState.largest_current_bet = 0; //TODO correct?
+                        MoveDealerToNextPlayer();
+                        gameState.in_action = -1;
+                        gameState.largest_current_bet = 0; //TODO correct?
 
-                    ProvideOneCardToAllPlayers();
-                    ProvideOneCardToAllPlayers();
+                        ProvideOneCardToAllPlayers();
+                        ProvideOneCardToAllPlayers();
 
-                    //TODO also deduct the bet from the stack (or only at the end?)
+                        //TODO also deduct the bet from the stack (or only at the end?)
 
-                    //TODO: this will give the first turn to player under the gun (first turn should be for player after big blind)
+                        //TODO: this will give the first turn to player under the gun (first turn should be for player after big blind)
 
-                    BroadcastGameState();
+                        BroadcastGameState();
+                    }
                     break;
 
                 case 'next_cards_and_bet':
@@ -278,9 +279,6 @@ wsServer.on('request', function (request) {
 
                         console.log("END of game");
                         GetRankingAndBroadcast();
-                        //TODO: end of the game: determine score and collect bets
-                        //TODO: build ranking
-                        //TODO send end result (ranking) object over websockets to all clients.
                     }
                     break;
 
@@ -666,11 +664,15 @@ function BroadcastClientList() {
 }
 
 function RemovePlayer(playerToRemove) {
-    //TODO: don't remove when playing, then user always folds
     //When user sends unjoin
-    Players = Players.filter(function (player) {
-        return player.uuid !== playerToRemove.uuid;
-    });
+    if (gameState.game_id === "") {
+        //game didn't start yet
+        Players = Players.filter(function (player) {
+            return player.uuid !== playerToRemove.uuid;
+        });
+    } else {
+        playerToRemove.status = "inactive";
+    }
 }
 
 function RemoveClient(clientToRemove) {
@@ -758,6 +760,7 @@ function DoesEveryoneHasEqualBets() {
 }
 
 function GetRankingAndBroadcast() {
+    //TODO: finalize this calculation
     let ranking = [];
     let flop = gameState.board.join(' ');
     Players.forEach(function (player) {
