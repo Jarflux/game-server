@@ -83,7 +83,7 @@ wsServer.on('request', function (request) {
 
                 case 'join':
                     if (isValidPlayerApiKey(message.api_key)) {
-                        client.status = 'joined';
+                        client.status = 'player';
                         player.name = message.data;
                         client.name = message.data;
 
@@ -103,7 +103,7 @@ wsServer.on('request', function (request) {
                         BroadcastGameState();
                         BroadcastClientList();
                     } else {
-                        console.log("Player had invalid key", client.uuid);
+                        console.log("Player had invalid key", client.uuid, client.name);
                         client.connection.sendUTF(JSON.stringify({
                             'action': 'error',
                             'data': 'invalid-key'
@@ -141,7 +141,7 @@ wsServer.on('request', function (request) {
                             'data': 'unjoined'
                         }));
                     } else {
-                        console.log("Unjoining with an invalid key", client.uuid);
+                        console.log("Unjoining with an invalid key", client.uuid, client.name);
                         client.connection.sendUTF(JSON.stringify({
                             'action': 'error',
                             'data': 'invalid-key'
@@ -168,7 +168,7 @@ wsServer.on('request', function (request) {
                         BroadcastGameState();
                         BroadcastClientList();
                     } else {
-                        console.log("Observer had invalid key", client.uuid);
+                        console.log("Observer had invalid key", client.uuid, client.name);
                         client.connection.sendUTF(JSON.stringify({
                             'action': 'error',
                             'data': 'invalid-key'
@@ -192,7 +192,7 @@ wsServer.on('request', function (request) {
                         BroadcastGameState();
                         BroadcastClientList();
                     } else {
-                        console.log("Client to join as admin, but had invalid key", client.uuid);
+                        console.log("Client to join as admin, but had invalid key", client.uuid, client.name);
                         client.connection.sendUTF(JSON.stringify({
                             'action': 'error',
                             'data': 'invalid-key'
@@ -379,7 +379,7 @@ wsServer.on('request', function (request) {
         }
     });
     connection.on('close', function (reasonCode, description) {
-        console.log('Client disconnected: ', client.uuid);
+        console.log('Client disconnected: ', client.uuid, client.name);
 
         player.status = "inactive";
         RemoveClient(client);
@@ -492,7 +492,7 @@ function Client(uuid, connection) {
     this.uuid = uuid;
     this.name = '';
     this.connection = connection;
-    this.status = 'not-joined'; //not-joined, joined, observer, admin
+    this.status = 'not-joined'; //not-joined, player, observer, admin
     this.api_key = '';
 }
 
@@ -574,7 +574,18 @@ function ActivateGame() {
 function BroadcastGameState() {
     gameState.players = [];
     Players.forEach(function (player) {
-        gameState.players.push(player); //TODO This is exposing the api_key. should it not be stored on player? but only client?
+        gameState.players.push({
+            //public info
+            uuid: player.uuid,
+            name: player.name,
+            id: player.id,
+            stack: player.stack,
+            bet: player.bet,
+
+            //private info
+            hole_cards: player.hole_cards,
+            this_turn: gameState.in_action === player.id && gameState.in_action !== -1
+        });
     });
 
     //share full game view with observers & admins
@@ -590,7 +601,7 @@ function BroadcastGameState() {
 
     //share private game view to players
     Clients.forEach(function (client) {
-        if (client.status === 'joined') {
+        if (client.status === 'player') {
             gameState.players = [];
 
             Players.forEach(function (player) {
