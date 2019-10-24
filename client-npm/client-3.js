@@ -47,8 +47,8 @@ client.on('connect', function(connection) {
                             console.log("My turn");
 
                             //Return with a call, no matter what the input is
-                            connection.sendUTF(JSON.stringify({ action:'call'}));
-                            console.log("Responded with:", "CALL");
+                            connection.sendUTF(JSON.stringify({ action:'fold'}));
+                            console.log("Responded with:", "FOLD");
                         }
                     });
 

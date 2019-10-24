@@ -288,93 +288,108 @@ wsServer.on('request', function (request) {
                 case 'call': //{'action': 'call'}
                     setTimeout(function () {
                         if (player.id === gameState.in_action) {
-                            console.log("It's your turn");
+                            console.log("It's your turn (call)", player.name);
 
                             player.setBet(gameState.largest_current_bet);
                             player.last_action = 'call';
 
+                            client.connection.sendUTF(JSON.stringify({
+                                'action': 'success',
+                                'data': 'action-accepted'
+                            }));
+
                             if (!DoesEveryoneHasEqualBets()) {
-                                gameState.in_action = gameState.in_action + 1;
-
-                                if (gameState.in_action >= Players.length) {
-                                    gameState.in_action = 0;
-                                }
-
+                                MoveInActionToNextPlayer();
                                 BroadcastGameState();
+
+                                //TODO: log waiting for player name (which is the next player)
+                                //TODO: skip the inactive players
+                                //TODO: what about player without money?
                             } else {
                                 gameState.in_action = -1;
                                 BroadcastGameState();
                             }
+
                         } else {
-                            console.error("It's NOT your turn");
+                            console.error("It's NOT your turn", player.name);
+                            client.connection.sendUTF(JSON.stringify({
+                                'action': 'error',
+                                'data': 'not-your-turn'
+                            }));
                         }
 
-                        // //TODO: check if it your turn
-                        // if (player.action == 'please_bet') {
-                        //     var players = GetPlayersStartingWithSmallBlind();
-                        //     player.setBet(players[1].getBet());
-                        //     player.setAction('call');
-                        //
-                        //     if (ContinueBetting()) {
-                        //         AskNextPlayerToBet();
-                        //     } else {
-                        //         NextStepInTheGame();
-                        //     }
-                        // }
-                        //
-                        // //TODO: return that action was accepted or not.
-                        // BroadcastGameState();
-                        //TODO: gameState.in_action = -1; //TODO remove, just for testing
-
-                        //TODO move to the next player (if needed, otherwise stop & reset in_action)
-                        //TODO add timeout to slow the game
-                        //TODO retry
+                        //TODO: these actions are applicable to raise & fold as well.
+                        //TODO: was this action accepted?
+                        //TODO retry in case of error?
+                        //TODO; do we send back it's approved and that the client need to confirm?
                         //TODO what if call, raise is invalid, respond back to client
                         //TODO if client doesn't respond within 5 seconds, then fold for that player. & move to next player
-
-                        //TODO gameState.in_action++ (maar als groter dan # Players, zet terug naar 0).
 
                     }, 1000);
                     break;
 
                 case 'raise': //{'action': 'raise', 'data': 20}
 
-                    // TODO: if a player is already All-in move the exess chips into a extra pot and add to the eligeble players for pot
+                    setTimeout(function () {
+                        if (player.id === gameState.in_action) {
+                            console.log("It's your turn (raise)", player.name, message.data);
 
-                    // //TODO: check if it your turn
-                    // if (player.action == 'please_bet') {
-                    //     //TODO: check if bet is allowed.
-                    //     player.setBet(message.data);
-                    //     player.setAction('raise');
-                    //
-                    //     if (ContinueBetting()) {
-                    //         AskNextPlayerToBet();
-                    //     } else {
-                    //         NextStepInTheGame();
-                    //     }
-                    // }
-                    //
-                    // //TODO: return that action was accepted or not.
-                    // BroadcastGameState();
+                            //TODO: valid bet?
+                            player.setBet(message.data); //TODO: set or increment?
+                            player.last_action = 'call';
+
+                            client.connection.sendUTF(JSON.stringify({
+                                'action': 'success',
+                                'data': 'action-accepted'
+                            }));
+
+                            if (!DoesEveryoneHasEqualBets()) {
+                                MoveInActionToNextPlayer();
+                                BroadcastGameState();
+                            } else {
+                                gameState.in_action = -1;
+                                BroadcastGameState();
+                            }
+                        } else {
+                            console.error("It's NOT your turn", player.name);
+                            client.connection.sendUTF(JSON.stringify({
+                                'action': 'error',
+                                'data': 'not-your-turn'
+                            }));
+                        }
+
+                    }, 1000);
                     break;
 
                 case 'fold': //{'action': 'fold'}
+                    setTimeout(function () {
+                        if (player.id === gameState.in_action) {
+                            console.log("It's your turn (fold)", player.name);
 
-                    //
-                    // //TODO: check if it your turn
-                    //
-                    // if (player.action == 'please_bet') {
-                    //     player.setAction('fold');
-                    //
-                    //     if (ContinueBetting()) {
-                    //         AskNextPlayerToBet();
-                    //     } else {
-                    //         NextStepInTheGame();
-                    //     }
-                    // }
-                    // //TODO: check if this was the second to last player to fold, in that case only 1 player is left and will automatically win
-                    // //TODO: return that action was accepted or not.
-                    // BroadcastGameState();
+                            player.last_action = 'fold';
+
+                            client.connection.sendUTF(JSON.stringify({
+                                'action': 'success',
+                                'data': 'action-accepted'
+                            }));
+
+                            if (!DoesEveryoneHasEqualBets()) {
+                                MoveInActionToNextPlayer();
+                                BroadcastGameState();
+                            } else {
+                                gameState.in_action = -1;
+                                BroadcastGameState();
+                            }
+                        } else {
+                            console.error("It's NOT your turn", player.name);
+                            client.connection.sendUTF(JSON.stringify({
+                                'action': 'error',
+                                'data': 'not-your-turn'
+                            }));
+                        }
+
+                    }, 1000);
+
                     break;
             }
         }
@@ -765,8 +780,18 @@ function DoesEveryoneHasEqualBets() {
     return allEqualBets;
 }
 
+function MoveInActionToNextPlayer() {
+    gameState.in_action = gameState.in_action + 1;
+
+    if (gameState.in_action >= Players.length) {
+        gameState.in_action = 0;
+    }
+}
+
 function GetRankingAndBroadcast() {
     //TODO: finalize this calculation
+    //TODO: can you claim the pot when folding
+    //TODO will you be listed in the ranking when folding?
     let ranking = [];
     let flop = gameState.board.join(' ');
     Players.forEach(function (player) {
