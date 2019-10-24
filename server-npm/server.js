@@ -528,7 +528,7 @@ function AddOrReplacePlayer(playerToAdd) {
     let newPlayerList = [];
 
     let addedPlayer = false;
-    Players.forEach(function(player){
+    Players.forEach(function (player) {
         if (player.api_key === playerToAdd.api_key) {
             console.log("Player rejoined the game");
             newPlayerList.push(playerToAdd);
@@ -573,7 +573,7 @@ function ActivateGame() {
 
 function BroadcastGameState() {
     gameState.players = [];
-    Players.forEach(function(player){
+    Players.forEach(function (player) {
         gameState.players.push(player); //TODO This is exposing the api_key. should it not be stored on player? but only client?
     });
 
@@ -632,9 +632,9 @@ function BroadcastGameState() {
     //TODO: for every broadcast, save the game state in a file.
 }
 
-function BroadcastClientList(){
+function BroadcastClientList() {
     let clientList = [];
-    Clients.forEach(function(client){
+    Clients.forEach(function (client) {
         clientList.push({
             uuid: client.uuid,
             name: client.name,
@@ -643,7 +643,7 @@ function BroadcastClientList(){
     });
 
     //share full game view with observers & admins
-    Clients.forEach(function(client){
+    Clients.forEach(function (client) {
         if (client.status === 'admin' || client.status === 'observer') {
             let message = JSON.stringify({
                 'action': 'client_list',
@@ -654,11 +654,10 @@ function BroadcastClientList(){
     });
 }
 
-
 function RemovePlayer(playerToRemove) {
     //TODO: don't remove when playing, then user always folds
     //When user sends unjoin
-    Players = Players.filter(function(player){
+    Players = Players.filter(function (player) {
         return player.uuid !== playerToRemove.uuid;
     });
 }
@@ -789,15 +788,15 @@ function GetNewGameId() {
 function endHand() { // Hand is poker lingo for a game
 
     // If only 1 person left in the hand, he/she wins without a showdown
-    if( Players.filter(player => player.status === 'active').length === 1){
+    if (Players.filter(player => player.status === 'active').length === 1) {
         let player = Players.filter(player => player.status === 'active')[0];
         player.stack += gameState.pot;
-    }else{  // If more than 2 people are active
+    } else {  // If more than 2 people are active
         let ranking = [] // getWinners();
         // For each winner
-            // for each pot take eligable winners
-                // determine if it is a split pot
-                // award correct share of pot to winner(s)
+        // for each pot take eligable winners
+        // determine if it is a split pot
+        // award correct share of pot to winner(s)
     }
 
     // TODO Reset gamestate: Clear all bets, empty pot, remove hole cards, clean board,
