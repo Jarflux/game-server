@@ -3,7 +3,7 @@
   "small_blind": 10,
   "big_blind": 20,
   "largest_current_bet": 0,
-  "pot": 0,
+  "pots": [],
   "minimum_raise": 20,
   "dealer": -1,
   "in_action": -1,
