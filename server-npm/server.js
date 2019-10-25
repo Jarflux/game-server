@@ -12,7 +12,7 @@ var server = http.createServer(function (request, response) {
     response.end();
 });
 server.listen(8081, function () {
-    console.log((new Date()) + ' Server is listening on port 8080');
+    console.log((new Date()) + ' Server is listening on port 8081');
 });
 
 let wsServer = new WebSocketServer({
@@ -563,7 +563,10 @@ Player.prototype = {
         }
         //gameState.pots[0].value = gameState.pots[0].value + bet;
         gameState.largest_current_bet = bet;
-    }
+    },
+    stillInTheRunning: function () {
+        return this.status === 'active' && this.last_action !== 'fold';
+    },
 };
 
 //when joining (replace or add to Players list)
@@ -574,8 +577,14 @@ function AddOrReplacePlayer(playerToAdd) {
     Players.forEach(function (player) {
         if (player.api_key === playerToAdd.api_key) {
             console.log("Player rejoined the game");
-            player.uuid = playerToAdd.uuid;
-            newPlayerList.push(player);
+            playerToAdd.status = 'active';
+            playerToAdd.id = player.id;
+            playerToAdd.stack = player.stack;
+            playerToAdd.bet = player.bet;
+            playerToAdd.last_action = player.last_action;
+            playerToAdd.hole_cards = player.hole_cards;
+
+            newPlayerList.push(playerToAdd);
             addedPlayer = true;
         } else {
             //existing player
@@ -869,21 +878,23 @@ function CalculateRanking() {
     let ranking = [];
     let flop = gameState.board.join(' ');
     Players.forEach(function (player) {
-        let cards = player.hole_cards.join(' ') + ' ' + flop;
-        const rank = rankBoard(cards);
-        const description = rankDescription[rank];
+        if (player.last_action !== 'fold') {
+            let cards = player.hole_cards.join(' ') + ' ' + flop;
+            const rank = rankBoard(cards);
+            const description = rankDescription[rank];
 
-        console.log("Player:", player.name);
-        console.log('%s is a %s', cards, description);
-        console.log('Rank ' + rank);
+            console.log("Player:", player.name);
+            console.log('%s is a %s', cards, description);
+            console.log('Rank ' + rank);
 
-        ranking.push({
-            uuid: player.uuid,
-            name: player.name,
-            cards: cards,
-            description: description,
-            rank: rank
-        })
+            ranking.push({
+                uuid: player.uuid,
+                name: player.name,
+                cards: cards,
+                description: description,
+                rank: rank
+            });
+        }
     });
 
     //Sort on ranking

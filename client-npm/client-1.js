@@ -66,4 +66,5 @@ client1.on('connect', function(connection) {
     });
 });
 
+//client1.connect('ws://10.150.146.39:8081/', 'echo-protocol');
 client1.connect('ws://localhost:8081/', 'echo-protocol');
