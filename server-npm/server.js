@@ -302,13 +302,19 @@ wsServer.on('request', function (request) {
 
                     break;
 
+                case 'check': //{'action': 'check'}
                 case 'call': //{'action': 'call'}
                     setTimeout(function () {
                         if (player.id === gameState.in_action) {
-                            console.log("It's your turn (call)", player.name);
-
-                            player.setBet(gameState.largest_current_bet);
-                            player.last_action = 'call';
+                            if (gameState.largest_current_bet === 0) {
+                                console.log("Action for ", player.name, "(CHECK)");
+                                player.setBet(gameState.largest_current_bet);
+                                player.last_action = 'check';
+                            } else {
+                                console.log("Action for ", player.name, "(CALL)");
+                                player.setBet(gameState.largest_current_bet);
+                                player.last_action = 'call';
+                            }
 
                             client.connection.sendUTF(JSON.stringify({
                                 'action': 'success',
@@ -346,14 +352,13 @@ wsServer.on('request', function (request) {
                     break;
 
                 case 'raise': //{'action': 'raise', 'data': 20}
-
                     setTimeout(function () {
                         if (player.id === gameState.in_action) {
-                            console.log("It's your turn (raise)", player.name, message.data);
+                            console.log("Action for ", player.name, "(RAISE)", message.data);
 
                             //TODO: valid bet?
                             player.setBet(message.data); //TODO: set or increment?
-                            player.last_action = 'call';
+                            player.last_action = 'raise';
 
                             client.connection.sendUTF(JSON.stringify({
                                 'action': 'success',
@@ -381,7 +386,7 @@ wsServer.on('request', function (request) {
                 case 'fold': //{'action': 'fold'}
                     setTimeout(function () {
                         if (player.id === gameState.in_action) {
-                            console.log("It's your turn (fold)", player.name);
+                            console.log("Action for ", player.name, "(FOLD)");
 
                             player.last_action = 'fold';
 
@@ -774,14 +779,21 @@ function IncreaseStackForAllPlayers(credits) {
     });
 }
 
+function GetCurrentPlayerInAction() {
+    let nextPlayer = undefined;
+    Players.forEach(function (currentPlayer) {
+        if (nextPlayer === undefined && currentPlayer.id === gameState.in_action) {
+            nextPlayer = currentPlayer;
+        }
+    });
+
+    return nextPlayer;
+}
+
 function MoveInActionToNextPlayer() {
-    gameState.in_action = gameState.in_action + 1;
-
-    //TODO next active player
-
-    if (gameState.in_action >= Players.length) {
-        gameState.in_action = 0;
-    }
+    let nextPlayer = GetNextActivePlayer(GetCurrentPlayerInAction());
+    gameState.in_action = nextPlayer.id;
+    console.log("next player is", nextPlayer.name)
 }
 
 function ResetLastActionForAllPlayers() {
@@ -810,10 +822,10 @@ function GetNextPlayer(player) {
 
 function GetNextActivePlayer(player) {
     let nextPlayer = GetNextPlayer(player);
-    if (nextPlayer.status === 'active') {
+    if (nextPlayer.status === 'active' && nextPlayer.last_action !== 'fold') {
         return nextPlayer;
     }
-    return nextPlayer; //TODO: GetNextActivePlayer(nextPlayer);
+    return GetNextActivePlayer(nextPlayer);
 }
 
 function GetDealer() {
