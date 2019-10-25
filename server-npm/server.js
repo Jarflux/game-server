@@ -354,11 +354,20 @@ wsServer.on('request', function (request) {
                 case 'raise': //{'action': 'raise', 'data': 20}
                     setTimeout(function () {
                         if (player.id === gameState.in_action) {
-                            console.log("Action for ", player.name, "(RAISE)", message.data);
+                            if (gameState.largest_current_bet === message.data) {
+                                console.log("Action for ", player.name, "(CALL)", message.data);
 
-                            //TODO: valid bet?
-                            player.setBet(message.data); //TODO: set or increment?
-                            player.last_action = 'raise';
+                                //TODO: valid bet?
+                                player.setBet(message.data); //TODO: set or increment?
+                                player.last_action = 'call';
+                            } else {
+                                console.log("Action for ", player.name, "(RAISE)", message.data);
+
+                                //TODO: valid bet?
+                                player.setBet(message.data); //TODO: set or increment?
+                                player.last_action = 'raise';
+                                gameState.pots[0].eligle_players = [player.id];
+                            }
 
                             client.connection.sendUTF(JSON.stringify({
                                 'action': 'success',
@@ -372,6 +381,7 @@ wsServer.on('request', function (request) {
                                 EndOfBettingRound();
                                 BroadcastGameState();
                             }
+
                         } else {
                             console.error("It's NOT your turn", player.name);
                             client.connection.sendUTF(JSON.stringify({
@@ -389,6 +399,10 @@ wsServer.on('request', function (request) {
                             console.log("Action for ", player.name, "(FOLD)");
 
                             player.last_action = 'fold';
+
+                            gameState.pots[0].eligle_players = gameState.pots[0].eligle_players.filter(function(index){
+                                return index !== player.id;
+                            });
 
                             client.connection.sendUTF(JSON.stringify({
                                 'action': 'success',
@@ -556,16 +570,16 @@ Player.prototype = {
         this.hole_cards.push(hand);
     },
     setBet: function (bet) {
-
         let chipsToAddTobet = bet - this.bet;
-
         if (this.stack >= chipsToAddTobet && bet > 0) {
             //TODO If player already posted a small/big blind dont subtract the complete bet
             this.bet = bet;
             this.stack = this.stack - chipsToAddTobet;
         }
         gameState.pots[0].size = gameState.pots[0].size + chipsToAddTobet;
-        gameState.pots[0].eligle_players.push(this.id);
+        if (gameState.pots[0].eligle_players.indexOf(this.id) === -1) {
+            gameState.pots[0].eligle_players.push(this.id);
+        }
         gameState.largest_current_bet = bet;
     },
     stillInTheRunning: function () {
@@ -925,7 +939,11 @@ function EndHand() {
 
 function DividePots() {
     gameState.pots.forEach(function (pot) {
-        // TODO Ben Caluclate and divide
+        let player = Players.filter(function (player) {
+            return player.uuid === gameState.ranking[0].uuid
+        })[0];
+        player.stack += pot.size;
+        pot.size = 0;
     });
 }
 
@@ -941,10 +959,13 @@ function ClearSharedGameState() {
     gameState.minimum_raise = 0;
     gameState.largest_current_bet = 0;
     gameState.in_action = -1;
-    gameState.pots = [];
+    gameState.pots = [{
+        "size": 0,
+        "eligle_players": []
+    }];
 }
 
-function BroadCastEndOfHand(){
+function BroadCastEndOfHand() {
     Clients.forEach(function (client) {
         let message = JSON.stringify({
             'action': 'end_of_hand',
