@@ -39,7 +39,7 @@
 
     <br /><br />
     <button v-on:click="startGame" v-if="connection.joined && !gamestate.game_started && gamestate.players.length > 1">Start game</button>
-    <button v-on:click="startHand" v-if="connection.joined && !gamestate.hand_started && gamestate.players.length > 1">Start hand</button>
+    <button v-on:click="startHand" v-if="connection.joined && gamestate.game_started && !gamestate.hand_started && gamestate.players.length > 1">Start hand</button>
     <button v-on:click="nextBettingRound" v-if="connection.joined && gamestate.dealer !== -1 && gamestate.in_action === -1 && !gamestate.end_of_hand">Next betting round</button>
     <button v-on:click="closeHand" v-if="connection.joined && gamestate.dealer !== -1 && gamestate.in_action === -1 && gamestate.end_of_hand && gamestate.ranking.length === 0">Get ranking & assign pot</button>
 

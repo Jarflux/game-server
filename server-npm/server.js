@@ -738,10 +738,6 @@ function EndOfBettingRound() {
 
     //TODO: reset bets
 
-    Players.forEach(function (player) {
-        player.bet = 0;
-    });
-
     //TODO: Ben end of betting round
 }
 
@@ -801,6 +797,7 @@ function ResetLastActionForAllPlayers() {
         if (player.last_action !== 'fold') {
             player.last_action = '';
         }
+        player.bet = 0;
     });
 }
 
