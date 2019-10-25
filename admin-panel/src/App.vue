@@ -1,43 +1,47 @@
 <template>
   <div id="app">
-    <h2>Game ID: {{ gamestate.game_id }}</h2>
+    <div v-if="gamestate.game_id !== 'start'">
 
-    <div class="table container" v-if="connection.connected">
-      <div class="players row">
-        <div :class="['player', `player--${player.status}`, (player.id === gamestate.in_action) ? 'player--in_action' : '']" v-for="player in gamestate.players">
-          <div class="name">{{ player.name }} <img class="dealer-button" src="./assets/dealer-button.png" v-if="player.id === gamestate.dealer"/></div>
-          <div class="chips-stack">{{ player.stack }}</div>
+      <h2>Game ID: {{ gamestate.game_id }}</h2>
 
-          <div :class="['hole-cards', `hole-cards--${player.status}`]" >
-            <div class="playing-card" v-for="card in player.hole_cards">
-              <vue-playing-card  v-bind:signature="card" style="width:75px;"></vue-playing-card>
+      <div class="table container" v-if="connection.connected">
+        <div class="players row">
+          <div :class="['player', `player--${player.status}`, (player.id === gamestate.in_action) ? 'player--in_action' : '']" v-for="player in gamestate.players">
+            <div class="name">{{ player.name }} <img class="dealer-button" src="./assets/dealer-button.png" v-if="player.id === gamestate.dealer"/></div>
+            <div class="chips-stack">{{ player.stack }}</div>
+
+            <div :class="['hole-cards', `hole-cards--${player.status}`]" >
+              <div class="playing-card" v-for="card in player.hole_cards">
+                <vue-playing-card  v-bind:signature="card" style="width:75px;"></vue-playing-card>
+              </div>
             </div>
+
+            <div v-if="player.bet > 0" class="bet">{{ player.bet }} - {{ player.last_action }}</div>
+
           </div>
+        </div>
 
-          <div v-if="player.bet > 0" class="bet">{{ player.bet }} - {{ player.last_action }}</div>
+        <div class="pot" v-if="connection.connected">Pot: {{ gamestate.pot }}</div>
 
+        <div class="larget-bet" v-if="connection.connected">Largest bet: {{ gamestate.largest_current_bet }}</div>
+
+        <div class="board row">
+          <div class="playing-card" v-for="card in gamestate.board">
+            <vue-playing-card height="90" v-bind:signature="card" style="width:100px;"></vue-playing-card>
+          </div>
         </div>
       </div>
 
-      <div class="pot" v-if="connection.connected">Pot: {{ gamestate.pot }}</div>
-
-      <div class="larget-bet" v-if="connection.connected">Largest bet: {{ gamestate.largest_current_bet }}</div>
-
-      <div class="board row">
-        <div class="playing-card" v-for="card in gamestate.board">
-          <vue-playing-card height="90" v-bind:signature="card" style="width:100px;"></vue-playing-card>
-        </div>
-      </div>
     </div>
 
     <button v-on:click="join" v-if="!connection.joined">Join</button>
     <button v-on:click="unjoin" v-if="connection.joined">Unjoin</button>
 
     <br /><br />
-    <button v-on:click="startGame" v-if="connection.joined">Start game</button>
-    <button v-on:click="startHand" v-if="connection.joined">Start hand</button>
-    <button v-on:click="nextBettingRound" v-if="connection.joined && gamestate.dealer !== -1 && gamestate.in_action === -1 && gamestate.board.length < 5">Next betting round</button>
-    <button v-on:click="nextBettingRound" v-if="connection.joined && gamestate.dealer !== -1 && gamestate.in_action === -1 && gamestate.board.length === 5 && gamestate.ranking.length === 0">Get ranking & assign pot</button>
+    <button v-on:click="startGame" v-if="connection.joined && gamestate.players.length > 1">Start game</button>
+    <button v-on:click="startHand" v-if="connection.joined && gamestate.players.length > 1">Start hand</button>
+    <button v-on:click="nextBettingRound" v-if="connection.joined && gamestate.dealer !== -1 && gamestate.in_action === -1 && !gamestate.end_of_hand">Next betting round</button>
+    <button v-on:click="closeHand" v-if="connection.joined && gamestate.dealer !== -1 && gamestate.in_action === -1 && gamestate.end_of_hand && gamestate.ranking.length === 0">Get ranking & assign pot</button>
 
     <div class="ranking" v-if="gamestate.ranking.length > 0">
       <h3>Ranking</h3>
@@ -51,7 +55,6 @@
 <script>
   import Vue from 'vue';
   import VuePlayingCard from 'vue-playing-card';
-  import gamestate from './json/game-state.json'
   import VueNativeSock from 'vue-native-websocket'
 
   const API_KEY = 'R3a8FibuDreX"%G)kvn17>/}8;,#E1OoAAU{Dx?l(###XAm=4QL2lLTUlmj-{}A';
@@ -59,6 +62,11 @@
   let connection = {
       connected: false,
       joined: false,
+  };
+
+  let gamestate = {
+      game_id: "start",
+      players: []
   };
 
   gamestate.ranking = [];
@@ -102,6 +110,10 @@
         nextBettingRound: function(val) {
             const data = { action:'next_betting_round', api_key: API_KEY };
             this.$socket.sendObj(data);
+        },
+        closeHand: function(val) {
+            const data = { action:'close_hand', api_key: API_KEY };
+            this.$socket.sendObj(data);
         }
     },
     created () {
@@ -124,6 +136,7 @@
                     gamestate.minimum_raise = newGameState.minimum_raise;
                     gamestate.board = newGameState.board;
                     gamestate.ranking = [];
+                    gamestate.end_of_hand = newGameState.end_of_hand;
 
                     break;
                 case "connected":
@@ -144,7 +157,7 @@
                         console.error("Invalid KEY");
                     }
                     break;
-                case "end_of_game":
+                case "end_of_hand":
                     console.log("End of game");
                     gamestate.ranking = message.data;
                     break;

@@ -236,6 +236,7 @@ wsServer.on('request', function (request) {
                         MoveDealerToNextPlayer();
                         gameState.in_action = -1;
                         gameState.largest_current_bet = 0;
+                        gameState.end_of_hand = false;
 
                         ProvideOneCardToAllPlayers();
                         ProvideOneCardToAllPlayers();
@@ -256,7 +257,7 @@ wsServer.on('request', function (request) {
                             //first round, no Board Cards yet, just bet
                             ActivateGame(); //UTG is first player
                             BroadcastGameState();
-                        } else if (gameState.board.length == 0) {
+                        } else if (gameState.board.length === 0) {
                             console.log("FLOP");
                             BurnOneCard();
                             ProvideBoardCards(3);
@@ -265,7 +266,7 @@ wsServer.on('request', function (request) {
                             //TODO: First active Player after dealer can go first
                             ActivateGame();
                             BroadcastGameState();
-                        } else if (gameState.board.length == 3) {
+                        } else if (gameState.board.length === 3) {
                             console.log("TURN");
                             BurnOneCard();
                             ProvideBoardCards(1);
@@ -274,7 +275,7 @@ wsServer.on('request', function (request) {
                             //TODO: First active Player after dealer can go first
                             ActivateGame();
                             BroadcastGameState();
-                        } else if (gameState.board.length == 4) {
+                        } else if (gameState.board.length === 4) {
                             console.log("RIVER");
                             BurnOneCard();
                             ProvideBoardCards(1);
@@ -283,12 +284,22 @@ wsServer.on('request', function (request) {
                             //TODO: First active Player after dealer can go first
                             ActivateGame();
                             BroadcastGameState();
-                        } else if (gameState.board.length == 5) {
-                            gameState.in_action = -1;
-
-                            console.log("END of game");
-                            GetRankingAndBroadcast();
+                        } else if (gameState.board.length === 5) {
+                            gameState.end_of_hand = true;
+                            BroadcastGameState();
                         }
+                    }
+
+                    break;
+
+                case 'close_hand':
+                    if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
+                        console.log("Close hand");
+
+                        gameState.in_action = -1;
+
+                        console.log("END of game");
+                        GetRankingAndBroadcast();
                     }
 
                     break;
@@ -573,7 +584,7 @@ function AddOrReplacePlayer(playerToAdd) {
         //new player
         newPlayerList.push(playerToAdd);
 
-        if (gameState.game_id !== "") {
+        if (gameState.pot > 0) {
             playerToAdd.status = "inactive";
         }
     }
@@ -844,7 +855,7 @@ function GetRankingAndBroadcast() {
 
     Clients.forEach(function (client) {
         let message = JSON.stringify({
-            'action': 'end_of_game',
+            'action': 'end_of_hand',
             'data': ranking
         });
         client.connection.sendUTF(message);
