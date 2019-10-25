@@ -1,13 +1,15 @@
 <template>
   <div id="app">
-    <div v-if="gamestate.game_id !== 'start'">
+    <div :class="['server', (!connection.connected && !connection.joined) ? 'server--disconnected' : '', (connection.connected && !connection.joined) ? 'server--connected' : '', (connection.connected && connection.joined) ? 'server--ready' : '']"><i class="fa fa-circle"></i></div>
+
+    <div v-if="gamestate.game_id !== 'start' && connection.connected">
 
       <h2>Game ID: {{ gamestate.game_id }}</h2>
 
-      <div class="table container" v-if="connection.connected">
+      <div class="table container">
         <div class="players row">
           <div :class="['player', `player--${player.status}`, (player.id === gamestate.in_action) ? 'player--in_action' : '']" v-for="player in gamestate.players">
-            <div class="name">{{ player.name }} <img class="dealer-button" src="./assets/dealer-button.png" v-if="player.id === gamestate.dealer"/></div>
+            <div class="name">{{ player.name }} ({{player.id}}) <img class="dealer-button" src="./assets/dealer-button.png" v-if="player.id === gamestate.dealer"/></div>
             <div class="chips-stack">{{ player.stack }}</div>
 
             <div :class="['hole-cards', `hole-cards--${player.status}`, `hole-cards--${player.last_action}`]" >
@@ -21,9 +23,9 @@
           </div>
         </div>
 
-      <div class="pot" v-if="connection.connected" v-for="pot in gamestate.pots">Pot: {{ pot.value }}, Players: {{ pot.eligle_players }}</div>
+      <div class="pot" v-for="pot in gamestate.pots">Pot: {{ pot.size }}, Players: {{ pot.eligle_players }}</div>
 
-        <div class="larget-bet" v-if="connection.connected">Largest bet: {{ gamestate.largest_current_bet }}</div>
+        <div class="larget-bet" >Largest bet: {{ gamestate.largest_current_bet }}</div>
 
         <div class="board row">
           <div class="playing-card" v-for="card in gamestate.board">
@@ -56,6 +58,7 @@
   import Vue from 'vue';
   import VuePlayingCard from 'vue-playing-card';
   import VueNativeSock from 'vue-native-websocket'
+
 
   const API_KEY = 'R3a8FibuDreX"%G)kvn17>/}8;,#E1OoAAU{Dx?l(###XAm=4QL2lLTUlmj-{}A';
 
@@ -168,6 +171,11 @@
                     break;
             }
         };
+
+      this.$options.sockets.onclose = (data) => {
+        console.log("Server connection lost!");
+        connection.connected = false;
+      }
     }
   }
 </script>
@@ -182,6 +190,20 @@
     margin-top: 60px;
   }
 
+  .server{
+    position:absolute;
+    padding: 10px;
+    &--ready{
+      color:green;
+    }
+    &--connected{
+      color:orange;
+    }
+    &--disconnected{
+      color:red;
+    }
+
+  }
   .table {
     .players {
       display: flex;

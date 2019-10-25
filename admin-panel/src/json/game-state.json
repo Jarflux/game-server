@@ -5,11 +5,11 @@
   "largest_current_bet": 300,
   "pots": [
     {
-      "value": 500,
+      "size": 500,
       "eligle_players": [ 0, 1, 2, 3 ]
     },
     {
-      "value": 200,
+      "size": 200,
       "eligle_players": [ 0, 1, 2 ]
     }
   ],
