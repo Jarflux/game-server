@@ -558,7 +558,7 @@ Player.prototype = {
             this.bet = bet;
             this.stack = this.stack - bet;
         }
-        gameState.pots[0].value = gameState.pots[0].value + bet;
+        //gameState.pots[0].value = gameState.pots[0].value + bet;
         gameState.largest_current_bet = bet;
     }
 };
@@ -600,7 +600,7 @@ function MoveDealerToNextPlayer() {
 }
 
 function ActivateGame() {
-    if (gameState.largest_current_bet === 0) {
+    if (gameState.board.length === 0) {
         let smallBlind = GetSmallBlind();
         smallBlind.setBet(gameState.small_blind);
         smallBlind.last_action = "small_blind";
@@ -610,10 +610,9 @@ function ActivateGame() {
 
         let firstPlayerToBet = GetNextPlayer(bigBlind);
         gameState.in_action = firstPlayerToBet.id;
-        return;
     } else {
-        let bigBlind = GetBigBlind();
-        let firstPlayerToBet = GetNextPlayer(bigBlind);
+        let dealer = GetDealer();
+        let firstPlayerToBet = GetNextActivePlayer(dealer);
         gameState.in_action = firstPlayerToBet.id;
     }
 }
@@ -648,6 +647,8 @@ function BroadcastGameState() {
         }
     });
 
+    let client_to_send_your_turn = undefined;
+
     //share private game view to players
     Clients.forEach(function (client) {
         if (client.status === 'player') {
@@ -662,12 +663,15 @@ function BroadcastGameState() {
                         stack: player.stack,
                         bet: player.bet,
                         last_action: player.last_action,
+                        status: player.status,
 
                         //this is you
                         hole_cards: player.hole_cards,
-                        api_key: player.api_key,
-                        your_turn: gameState.in_action === player.id && gameState.in_action !== -1
+                        api_key: player.api_key
                     });
+                    if (gameState.in_action === player.id && gameState.in_action !== -1) {
+                        client_to_send_your_turn = client;
+                    }
                 } else {
                     gameState.players.push({
                         uuid: player.uuid,
@@ -676,6 +680,7 @@ function BroadcastGameState() {
                         stack: player.stack,
                         bet: player.bet,
                         last_action: player.last_action,
+                        status: player.status,
                     });
                 }
             });
@@ -685,6 +690,13 @@ function BroadcastGameState() {
                 'data': gameState
             });
             client.connection.sendUTF(message);
+
+            if (client_to_send_your_turn) {
+                let message2 = JSON.stringify({
+                    'action': 'your_turn'
+                });
+                client_to_send_your_turn.connection.sendUTF(message2);
+            }
         }
     });
 
@@ -718,6 +730,14 @@ function BroadcastClientList() {
 
 function EndOfBettingRound() {
     gameState.in_action = -1;
+
+    console.log("End of betting round");
+
+    //TODO: reset bets
+
+    Players.forEach(function (player) {
+        player.bet = 0;
+    });
 
     //TODO: Ben end of betting round
 }
@@ -756,9 +776,21 @@ function IncreaseStackForAllPlayers(credits) {
     });
 }
 
+function MoveInActionToNextPlayer() {
+    gameState.in_action = gameState.in_action + 1;
+
+    //TODO next active player
+
+    if (gameState.in_action >= Players.length) {
+        gameState.in_action = 0;
+    }
+}
+
 function ResetLastActionForAllPlayers() {
     Players.forEach(function (player) {
-        player.last_action = '';
+        if (player.last_action !== 'fold') {
+            player.last_action = '';
+        }
     });
 }
 
@@ -776,6 +808,14 @@ function GetNextPlayer(player) {
     });
 
     return nextPlayer;
+}
+
+function GetNextActivePlayer(player) {
+    let nextPlayer = GetNextPlayer(player);
+    if (nextPlayer.status === 'active') {
+        return nextPlayer;
+    }
+    return nextPlayer; //TODO: GetNextActivePlayer(nextPlayer);
 }
 
 function GetDealer() {
@@ -804,7 +844,7 @@ function DoesEveryoneHasEqualBets() {
     let allEqualBets = true;
     Players.forEach(function (player) {
         if (player.status === 'active') {
-            if ((player.last_action === 'raise' || player.last_action === 'call') && player.bet !== largestBet) {
+            if ((player.last_action === 'raise' || player.last_action === 'call' || player.last_action === 'check') && player.bet !== largestBet) {
                 allEqualBets = false;
             }
             if (player.last_action === '') {
@@ -816,14 +856,6 @@ function DoesEveryoneHasEqualBets() {
         }
     });
     return allEqualBets;
-}
-
-function MoveInActionToNextPlayer() {
-    gameState.in_action = gameState.in_action + 1;
-
-    if (gameState.in_action >= Players.length) {
-        gameState.in_action = 0;
-    }
 }
 
 function CalculateRanking() {

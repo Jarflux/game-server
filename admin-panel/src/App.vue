@@ -10,13 +10,13 @@
             <div class="name">{{ player.name }} <img class="dealer-button" src="./assets/dealer-button.png" v-if="player.id === gamestate.dealer"/></div>
             <div class="chips-stack">{{ player.stack }}</div>
 
-            <div :class="['hole-cards', `hole-cards--${player.status}`]" >
+            <div :class="['hole-cards', `hole-cards--${player.status}`, `hole-cards--${player.last_action}`]" >
               <div class="playing-card" v-for="card in player.hole_cards">
                 <vue-playing-card  v-bind:signature="card" style="width:75px;"></vue-playing-card>
               </div>
             </div>
 
-            <div v-if="player.bet > 0" class="bet">{{ player.bet }} - {{ player.last_action }}</div>
+            <div class="bet">{{ player.bet }} - {{ player.last_action }}</div>
 
           </div>
         </div>
@@ -38,8 +38,8 @@
     <button v-on:click="unjoin" v-if="connection.joined">Unjoin</button>
 
     <br /><br />
-    <button v-on:click="startGame" v-if="connection.joined && gamestate.players.length > 1">Start game</button>
-    <button v-on:click="startHand" v-if="connection.joined && gamestate.players.length > 1">Start hand</button>
+    <button v-on:click="startGame" v-if="connection.joined && gamestate.game_id === '' && gamestate.players.length > 1">Start game</button>
+    <button v-on:click="startHand" v-if="connection.joined && gamestate.game_id && gamestate.players.length > 1 && gamestate.dealer === -1">Start hand</button>
     <button v-on:click="nextBettingRound" v-if="connection.joined && gamestate.dealer !== -1 && gamestate.in_action === -1 && !gamestate.end_of_hand">Next betting round</button>
     <button v-on:click="closeHand" v-if="connection.joined && gamestate.dealer !== -1 && gamestate.in_action === -1 && gamestate.end_of_hand && gamestate.ranking.length === 0">Get ranking & assign pot</button>
 
@@ -132,10 +132,10 @@
                     gamestate.small_blind = newGameState.small_blind;
                     gamestate.big_blind = newGameState.big_blind;
                     gamestate.largest_current_bet = newGameState.largest_current_bet;
-                    gamestate.pot = newGameState.pot;
+                    gamestate.pots = newGameState.pots;
                     gamestate.minimum_raise = newGameState.minimum_raise;
                     gamestate.board = newGameState.board;
-                    gamestate.ranking = [];
+                    gamestate.ranking = newGameState.ranking;
                     gamestate.end_of_hand = newGameState.end_of_hand;
 
                     break;
@@ -220,7 +220,7 @@
           flex-wrap: nowrap;
           justify-content: center;
 
-          &--folded{
+          &--fold {
             filter: contrast(25%) opacity(80%) grayscale(0%);
           }
 
