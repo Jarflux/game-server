@@ -10,5 +10,6 @@
   "end_of_hand": false,
   "players": [
   ],
-  "board": []
+  "board": [],
+  "ranking": []
 }
