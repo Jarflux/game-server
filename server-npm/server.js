@@ -890,12 +890,13 @@ function GetNewGameId() {
 function EndHand() {
     CalculateRanking();
     DividePots();
+    BroadCastEndOfHand();
+    gameState.hand_started = false;
+    BroadcastGameState();
+
     ClearPlayerSpecificGameState();
     ClearSharedGameState();
-    BroadCastEndOfHand();
     ClearRanking();
-
-    gameState.hand_started = false;
 }
 
 function DividePots() {

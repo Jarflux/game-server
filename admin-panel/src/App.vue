@@ -45,8 +45,8 @@
 
     <div class="ranking" v-if="gamestate.ranking.length > 0">
       <h3>Ranking</h3>
-      <ol v-for="rank in gamestate.ranking">
-        <li>{{ rank.name }} - {{ rank.description }} ({{ rank.rank }})</li>
+      <ol>
+        <li v-for="rank in gamestate.ranking">{{ rank.name }} - {{ rank.description }} ({{ rank.rank }})</li>
       </ol>
     </div>
   </div>
