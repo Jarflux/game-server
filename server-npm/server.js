@@ -215,6 +215,8 @@ wsServer.on('request', function (request) {
                         EraseHoleCardsForAllPlayers();
                         gameState.board = [];
 
+                        gameState.game_started = true;
+
                         //TODO what if still bets are open when starting new game? give back the money?
 
                         BroadcastGameState();
@@ -241,11 +243,13 @@ wsServer.on('request', function (request) {
                         ProvideOneCardToAllPlayers();
                         ProvideOneCardToAllPlayers();
 
+                        gameState.hand_started = true;
+
+                        ActivateGame(); //UTG is first player
+                        BroadcastGameState();
                         //TODO also deduct the bet from the stack (or only at the end?)
 
                         //TODO: this will give the first turn to player under the gun (first turn should be for player after big blind)
-
-                        BroadcastGameState();
                     }
                     break;
 
@@ -253,11 +257,7 @@ wsServer.on('request', function (request) {
                     if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
                         console.log("Next step in the game");
 
-                        if (gameState.largest_current_bet === 0) {
-                            //first round, no Board Cards yet, just bet
-                            ActivateGame(); //UTG is first player
-                            BroadcastGameState();
-                        } else if (gameState.board.length === 0) {
+                        if (gameState.board.length === 0) {
                             console.log("FLOP");
                             BurnOneCard();
                             ProvideBoardCards(3);
@@ -294,12 +294,10 @@ wsServer.on('request', function (request) {
 
                 case 'close_hand':
                     if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
-                        console.log("Close hand");
-
                         gameState.in_action = -1;
 
-                        console.log("END of game");
-                        GetRankingAndBroadcast();
+                        console.log("END of hand");
+                        EndHand();
                     }
 
                     break;
@@ -584,7 +582,7 @@ function AddOrReplacePlayer(playerToAdd) {
         //new player
         newPlayerList.push(playerToAdd);
 
-        if (gameState.pots.length > 0) {
+        if (gameState.game_started === true) {
             playerToAdd.status = "inactive";
         }
     }
@@ -896,6 +894,8 @@ function EndHand() {
     ClearSharedGameState();
     BroadCastEndOfHand();
     ClearRanking();
+
+    gameState.hand_started = false;
 }
 
 function DividePots() {
