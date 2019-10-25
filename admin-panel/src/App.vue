@@ -21,7 +21,7 @@
           </div>
         </div>
 
-        <div class="pot" v-if="connection.connected">Pot: {{ gamestate.pot }}</div>
+      <div class="pot" v-if="connection.connected" v-for="pot in gamestate.pots">Pot: {{ pot.value }}, Players: {{ pot.eligle_players }}<div>
 
         <div class="larget-bet" v-if="connection.connected">Largest bet: {{ gamestate.largest_current_bet }}</div>
 

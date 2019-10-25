@@ -3,7 +3,16 @@
   "small_blind": 10,
   "big_blind": 20,
   "largest_current_bet": 300,
-  "pot": 450,
+  "pots": [
+    {
+      "value": 500,
+      "eligle_players": [ 0, 1, 2, 3 ]
+    },
+    {
+      "value": 200,
+      "eligle_players": [ 0, 1, 2 ]
+    }
+  ],
   "minimum_raise": 500,
   "dealer": 1,
   "in_action": 0,

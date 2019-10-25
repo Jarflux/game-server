@@ -826,10 +826,7 @@ function MoveInActionToNextPlayer() {
     }
 }
 
-function GetRankingAndBroadcast() {
-    //TODO: finalize this calculation
-    //TODO: can you claim the pot when folding
-    //TODO will you be listed in the ranking when folding?
+function CalculateRanking() {
     let ranking = [];
     let flop = gameState.board.join(' ');
     Players.forEach(function (player) {
@@ -852,14 +849,7 @@ function GetRankingAndBroadcast() {
 
     //Sort on ranking
     ranking.sort((a, b) => (a.rank > b.rank) ? 1 : -1);
-
-    Clients.forEach(function (client) {
-        let message = JSON.stringify({
-            'action': 'end_of_hand',
-            'data': ranking
-        });
-        client.connection.sendUTF(message);
-    });
+    gameState.ranking = ranking;
 }
 
 function GetNewGameId() {
@@ -867,20 +857,49 @@ function GetNewGameId() {
         + Math.random().toString(36).substr(2, 9);
 }
 
-//TODO Reimplement after adapting new pots json structure in the gamestate
-function endHand() { // Hand is poker lingo for a game
-
-    // If only 1 person left in the hand, he/she wins without a showdown
-    if (Players.filter(player => player.status === 'active').length === 1) {
-        let player = Players.filter(player => player.status === 'active')[0];
-        player.stack += gameState.pot;
-    } else {  // If more than 2 people are active
-        let ranking = [] // getWinners();
-        // For each winner
-        // for each pot take eligable winners
-        // determine if it is a split pot
-        // award correct share of pot to winner(s)
-    }
-
-    // TODO Reset gamestate: Clear all bets, empty pot, remove hole cards, clean board,
+function EndHand() {
+    CalculateRanking();
+    DividePots();
+    ClearPlayerSpecificGameState();
+    ClearSharedGameState();
+    BroadCastEndOfHand();
+    ClearRanking();
 }
+
+function DividePots() {
+    gameState.pots.forEach(function (pot) {
+        // TODO Ben Caluclate and divide
+    });
+}
+
+function ClearPlayerSpecificGameState() {
+    Players.forEach(function (player) {
+        player.hole_cards = [];
+        player.bet = 0;
+    });
+}
+
+function ClearSharedGameState() {
+    gameState.board = [];
+    gameState.minimum_raise = 0;
+    gameState.largest_current_bet = 0;
+    gameState.in_action = -1;
+    gameState.pots = [];
+}
+
+function BroadCastEndOfHand(){
+    Clients.forEach(function (client) {
+        let message = JSON.stringify({
+            'action': 'end_of_hand',
+            'data': gameState
+        });
+        client.connection.sendUTF(message);
+    });
+}
+
+function ClearRanking() {
+    gameState.ranking = [];
+}
+
+
+
