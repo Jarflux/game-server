@@ -556,12 +556,16 @@ Player.prototype = {
         this.hole_cards.push(hand);
     },
     setBet: function (bet) {
-        if (this.stack >= bet && bet > 0) {
+
+        let chipsToAddTobet = bet - this.bet;
+
+        if (this.stack >= chipsToAddTobet && bet > 0) {
             //TODO If player already posted a small/big blind dont subtract the complete bet
             this.bet = bet;
-            this.stack = this.stack - bet;
+            this.stack = this.stack - chipsToAddTobet;
         }
-        //gameState.pots[0].value = gameState.pots[0].value + bet;
+        gameState.pots[0].size = gameState.pots[0].size + chipsToAddTobet;
+        gameState.pots[0].eligle_players.push(this.id);
         gameState.largest_current_bet = bet;
     }
 };
