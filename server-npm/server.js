@@ -564,12 +564,18 @@ function AddOrReplacePlayer(playerToAdd) {
             newPlayerList.push(player);
             addedPlayer = true;
         } else {
+            //existing player
             newPlayerList.push(player);
         }
     });
 
     if (!addedPlayer) {
+        //new player
         newPlayerList.push(playerToAdd);
+
+        if (gameState.game_id !== "") {
+            playerToAdd.status = "inactive";
+        }
     }
 
     Players = newPlayerList;
