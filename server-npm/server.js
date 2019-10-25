@@ -201,6 +201,7 @@ wsServer.on('request', function (request) {
                     break;
 
                 case 'new_game':
+                    //TODO: validate if this is an allowed action (towards the game state)
                     if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
                         ShufflePlayers();
                         IncreaseStackForAllPlayers(1000);
@@ -222,6 +223,7 @@ wsServer.on('request', function (request) {
                     break;
 
                 case 'new_round':
+                    //TODO: validate if this is an allowed action (towards the game state)
                     if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
                         NewDeck();
                         console.log("Cards", Cards);
@@ -233,7 +235,7 @@ wsServer.on('request', function (request) {
 
                         MoveDealerToNextPlayer();
                         gameState.in_action = -1;
-                        gameState.largest_current_bet = 0; //TODO correct?
+                        gameState.largest_current_bet = 0;
 
                         ProvideOneCardToAllPlayers();
                         ProvideOneCardToAllPlayers();
@@ -252,28 +254,34 @@ wsServer.on('request', function (request) {
 
                         if (gameState.largest_current_bet === 0) {
                             //first round, no Board Cards yet, just bet
-                            ActivateGame(); //this will trigger the first player to play
+                            ActivateGame(); //UTG is first player
                             BroadcastGameState();
                         } else if (gameState.board.length == 0) {
                             console.log("FLOP");
-                            //TODO Burn 1 card before Flop
+                            BurnOneCard();
                             ProvideBoardCards(3);
                             ResetLastActionForAllPlayers();
-                            ActivateGame(); //this will trigger the first player to play
+                            gameState.largest_current_bet = 0;
+                            //TODO: First active Player after dealer can go first
+                            ActivateGame();
                             BroadcastGameState();
                         } else if (gameState.board.length == 3) {
                             console.log("TURN");
-                            //TODO Burn 1 card before Turn
+                            BurnOneCard();
                             ProvideBoardCards(1);
                             ResetLastActionForAllPlayers();
-                            ActivateGame(); //this will trigger the first player to play
+                            gameState.largest_current_bet = 0;
+                            //TODO: First active Player after dealer can go first
+                            ActivateGame();
                             BroadcastGameState();
                         } else if (gameState.board.length == 4) {
                             console.log("RIVER");
-                            //TODO Burn 1 card before River
+                            BurnOneCard();
                             ProvideBoardCards(1);
                             ResetLastActionForAllPlayers();
-                            ActivateGame(); //this will trigger the first player to play
+                            gameState.largest_current_bet = 0;
+                            //TODO: First active Player after dealer can go first
+                            ActivateGame();
                             BroadcastGameState();
                         } else if (gameState.board.length == 5) {
                             gameState.in_action = -1;
@@ -306,7 +314,7 @@ wsServer.on('request', function (request) {
                                 //TODO: skip the inactive players
                                 //TODO: what about player without money?
                             } else {
-                                gameState.in_action = -1;
+                                EndOfBettingRound();
                                 BroadcastGameState();
                             }
 
@@ -347,7 +355,7 @@ wsServer.on('request', function (request) {
                                 MoveInActionToNextPlayer();
                                 BroadcastGameState();
                             } else {
-                                gameState.in_action = -1;
+                                EndOfBettingRound();
                                 BroadcastGameState();
                             }
                         } else {
@@ -377,7 +385,7 @@ wsServer.on('request', function (request) {
                                 MoveInActionToNextPlayer();
                                 BroadcastGameState();
                             } else {
-                                gameState.in_action = -1;
+                                EndOfBettingRound();
                                 BroadcastGameState();
                             }
                         } else {
@@ -482,6 +490,11 @@ function EraseHoleCardsForAllPlayers() {
     });
 }
 
+function BurnOneCard() {
+    let card = Cards.shift();
+    console.log("Burned:", card);
+}
+
 function ProvideOneCardToAllPlayers() {
     Players.forEach(function (player) {
         if (player.hole_cards.length < 2) {
@@ -547,7 +560,8 @@ function AddOrReplacePlayer(playerToAdd) {
     Players.forEach(function (player) {
         if (player.api_key === playerToAdd.api_key) {
             console.log("Player rejoined the game");
-            newPlayerList.push(playerToAdd);
+            player.uuid = playerToAdd.uuid;
+            newPlayerList.push(player);
             addedPlayer = true;
         } else {
             newPlayerList.push(player);
@@ -598,6 +612,7 @@ function BroadcastGameState() {
             stack: player.stack,
             bet: player.bet,
             last_action: player.last_action,
+            status: player.status,
 
             //private info
             hole_cards: player.hole_cards,
@@ -682,6 +697,12 @@ function BroadcastClientList() {
             client.connection.sendUTF(message);
         }
     });
+}
+
+function EndOfBettingRound() {
+    gameState.in_action = -1;
+
+    //TODO: Ben end of betting round
 }
 
 function RemovePlayer(playerToRemove) {
