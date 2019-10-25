@@ -558,7 +558,7 @@ Player.prototype = {
             this.bet = bet;
             this.stack = this.stack - bet;
         }
-        gameState.pot = gameState.pot + bet;
+        gameState.pots[0].value = gameState.pots[0].value + bet;
         gameState.largest_current_bet = bet;
     }
 };
@@ -584,7 +584,7 @@ function AddOrReplacePlayer(playerToAdd) {
         //new player
         newPlayerList.push(playerToAdd);
 
-        if (gameState.pot > 0) {
+        if (gameState.pots.length > 0) {
             playerToAdd.status = "inactive";
         }
     }
