@@ -4,7 +4,11 @@ var http = require('http');
 const crypto = require('crypto');
 const {rankBoard, rankDescription} = require('phe')
 
+const SLOW_DOWN = 1000;
+
 let gameState = require('./initial-game-state.json');
+
+//TODO: set status of player to 'out' if all money is gone
 
 var server = http.createServer(function (request, response) {
     console.log((new Date()) + ' Received request for ' + request.url);
@@ -221,9 +225,13 @@ wsServer.on('request', function (request) {
 
                         BroadcastGameState();
                     }
-
                     break;
-
+                case 'end_game':
+                    if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
+                        gameState.game_started = false;
+                        BroadcastGameState();
+                    }
+                    break;
                 case 'new_hand':
                     //TODO: validate if this is an allowed action (towards the game state)
                     if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
@@ -257,13 +265,15 @@ wsServer.on('request', function (request) {
                     if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
                         console.log("Next step in the game");
 
-                        if (gameState.board.length === 0) {
+                        if (OnlyOnePlayerLeft()) {
+                            gameState.end_of_hand = true;
+                            BroadcastGameState();
+                        } else if (gameState.board.length === 0) {
                             console.log("FLOP");
                             BurnOneCard();
                             ProvideBoardCards(3);
                             ResetLastActionForAllPlayers();
                             gameState.largest_current_bet = 0;
-                            //TODO: First active Player after dealer can go first
                             ActivateGame();
                             BroadcastGameState();
                         } else if (gameState.board.length === 3) {
@@ -272,7 +282,6 @@ wsServer.on('request', function (request) {
                             ProvideBoardCards(1);
                             ResetLastActionForAllPlayers();
                             gameState.largest_current_bet = 0;
-                            //TODO: First active Player after dealer can go first
                             ActivateGame();
                             BroadcastGameState();
                         } else if (gameState.board.length === 4) {
@@ -281,7 +290,6 @@ wsServer.on('request', function (request) {
                             ProvideBoardCards(1);
                             ResetLastActionForAllPlayers();
                             gameState.largest_current_bet = 0;
-                            //TODO: First active Player after dealer can go first
                             ActivateGame();
                             BroadcastGameState();
                         } else if (gameState.board.length === 5) {
@@ -289,142 +297,109 @@ wsServer.on('request', function (request) {
                             BroadcastGameState();
                         }
                     }
-
                     break;
 
                 case 'close_hand':
                     if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
-                        gameState.in_action = -1;
-
-                        console.log("END of hand");
                         EndHand();
                     }
-
                     break;
 
                 case 'check': //{'action': 'check'}
                 case 'call': //{'action': 'call'}
-                    setTimeout(function () {
-                        if (player.id === gameState.in_action) {
-                            if (gameState.largest_current_bet === 0) {
-                                console.log("Action for ", player.name, "(CHECK)");
-                                player.setBet(gameState.largest_current_bet);
-                                player.last_action = 'check';
-                            } else {
-                                console.log("Action for ", player.name, "(CALL)");
-                                player.setBet(gameState.largest_current_bet);
-                                player.last_action = 'call';
-                            }
-
-                            client.connection.sendUTF(JSON.stringify({
-                                'action': 'success',
-                                'data': 'action-accepted'
-                            }));
-
-                            if (!DoesEveryoneHasEqualBets()) {
-                                MoveInActionToNextPlayer();
-                                BroadcastGameState();
-
-                                //TODO: log waiting for player name (which is the next player)
-                                //TODO: skip the inactive players
-                                //TODO: what about player without money?
-                            } else {
-                                EndOfBettingRound();
-                                BroadcastGameState();
-                            }
-
+                    if (player.id === gameState.in_action) {
+                        clearTimeout(ACTION_TIMEOUT_FUNCTION);
+                        if (gameState.largest_current_bet === 0) {
+                            console.log("Action for ", player.name, "(CHECK)");
+                            player.setBet(gameState.largest_current_bet);
+                            player.last_action = 'check';
                         } else {
-                            console.error("It's NOT your turn", player.name);
-                            client.connection.sendUTF(JSON.stringify({
-                                'action': 'error',
-                                'data': 'not-your-turn'
-                            }));
+                            console.log("Action for ", player.name, "(CALL)");
+                            player.setBet(gameState.largest_current_bet);
+                            player.last_action = 'call';
                         }
 
-                        //TODO: these actions are applicable to raise & fold as well.
-                        //TODO: was this action accepted?
-                        //TODO retry in case of error?
-                        //TODO; do we send back it's approved and that the client need to confirm?
-                        //TODO what if call, raise is invalid, respond back to client
-                        //TODO if client doesn't respond within 5 seconds, then fold for that player. & move to next player
+                        client.connection.sendUTF(JSON.stringify({
+                            'action': 'success',
+                            'data': 'action-accepted'
+                        }));
 
-                    }, 1000);
+                        NextPersonOrEnd();
+                    } else {
+                        console.error("It's NOT your turn", player.name);
+                        client.connection.sendUTF(JSON.stringify({
+                            'action': 'error',
+                            'data': 'not-your-turn'
+                        }));
+                    }
+
+                    //TODO: these actions are applicable to raise & fold as well.
+                    //TODO: was this action accepted?
+                    //TODO retry in case of error?
+                    //TODO; do we send back it's approved and that the client need to confirm?
+                    //TODO what if call, raise is invalid, respond back to client
+                    //TODO if client doesn't respond within 5 seconds, then fold for that player. & move to next player
                     break;
 
                 case 'raise': //{'action': 'raise', 'data': 20}
-                    setTimeout(function () {
-                        if (player.id === gameState.in_action) {
-                            if (gameState.largest_current_bet === message.data) {
-                                console.log("Action for ", player.name, "(CALL)", message.data);
+                    if (player.id === gameState.in_action) {
+                        clearTimeout(ACTION_TIMEOUT_FUNCTION);
 
-                                //TODO: valid bet?
-                                player.setBet(message.data); //TODO: set or increment?
-                                player.last_action = 'call';
-                            } else {
-                                console.log("Action for ", player.name, "(RAISE)", message.data);
+                        if (gameState.largest_current_bet === message.data) {
+                            console.log("Action for ", player.name, "(CALL)", message.data);
 
-                                //TODO: valid bet?
-                                player.setBet(message.data); //TODO: set or increment?
-                                player.last_action = 'raise';
-                                gameState.pots[0].eligle_players = [player.id];
-                            }
-
-                            client.connection.sendUTF(JSON.stringify({
-                                'action': 'success',
-                                'data': 'action-accepted'
-                            }));
-
-                            if (!DoesEveryoneHasEqualBets()) {
-                                MoveInActionToNextPlayer();
-                                BroadcastGameState();
-                            } else {
-                                EndOfBettingRound();
-                                BroadcastGameState();
-                            }
-
+                            //TODO: valid bet?
+                            player.setBet(message.data); //TODO: set or increment?
+                            player.last_action = 'call';
                         } else {
-                            console.error("It's NOT your turn", player.name);
-                            client.connection.sendUTF(JSON.stringify({
-                                'action': 'error',
-                                'data': 'not-your-turn'
-                            }));
+                            console.log("Action for ", player.name, "(RAISE)", message.data);
+
+                            //TODO: valid bet?
+                            player.setBet(message.data); //TODO: set or increment?
+                            player.last_action = 'raise';
+                            gameState.pots[0].eligle_players = [player.id];
                         }
 
-                    }, 1000);
+                        client.connection.sendUTF(JSON.stringify({
+                            'action': 'success',
+                            'data': 'action-accepted'
+                        }));
+
+                        NextPersonOrEnd();
+                    } else {
+                        console.error("It's NOT your turn", player.name);
+                        client.connection.sendUTF(JSON.stringify({
+                            'action': 'error',
+                            'data': 'not-your-turn'
+                        }));
+                    }
+
                     break;
 
                 case 'fold': //{'action': 'fold'}
-                    setTimeout(function () {
-                        if (player.id === gameState.in_action) {
-                            console.log("Action for ", player.name, "(FOLD)");
+                    if (player.id === gameState.in_action) {
+                        console.log("Action for ", player.name, "(FOLD)");
+                        clearTimeout(ACTION_TIMEOUT_FUNCTION);
 
-                            player.last_action = 'fold';
+                        player.last_action = 'fold';
 
-                            gameState.pots[0].eligle_players = gameState.pots[0].eligle_players.filter(function(index){
-                                return index !== player.id;
-                            });
+                        gameState.pots[0].eligle_players = gameState.pots[0].eligle_players.filter(function(index){
+                            return index !== player.id;
+                        });
 
-                            client.connection.sendUTF(JSON.stringify({
-                                'action': 'success',
-                                'data': 'action-accepted'
-                            }));
+                        client.connection.sendUTF(JSON.stringify({
+                            'action': 'success',
+                            'data': 'action-accepted'
+                        }));
 
-                            if (!DoesEveryoneHasEqualBets()) {
-                                MoveInActionToNextPlayer();
-                                BroadcastGameState();
-                            } else {
-                                EndOfBettingRound();
-                                BroadcastGameState();
-                            }
-                        } else {
-                            console.error("It's NOT your turn", player.name);
-                            client.connection.sendUTF(JSON.stringify({
-                                'action': 'error',
-                                'data': 'not-your-turn'
-                            }));
-                        }
-
-                    }, 1000);
+                        NextPersonOrEnd();
+                    } else {
+                        console.error("It's NOT your turn", player.name);
+                        client.connection.sendUTF(JSON.stringify({
+                            'action': 'error',
+                            'data': 'not-your-turn'
+                        }));
+                    }
 
                     break;
             }
@@ -640,12 +615,16 @@ function ActivateGame() {
 
         let firstPlayerToBet = GetNextPlayer(bigBlind);
         gameState.in_action = firstPlayerToBet.id;
+        console.log("First player is", firstPlayerToBet.name)
     } else {
         let dealer = GetDealer();
         let firstPlayerToBet = GetNextActivePlayer(dealer);
         gameState.in_action = firstPlayerToBet.id;
+        console.log("First player is", firstPlayerToBet.name)
     }
 }
+
+let ACTION_TIMEOUT_FUNCTION = undefined;
 
 function BroadcastGameState() {
     gameState.players = [];
@@ -726,6 +705,15 @@ function BroadcastGameState() {
                     'action': 'your_turn'
                 });
                 client_to_send_your_turn.connection.sendUTF(message2);
+
+                clearTimeout(ACTION_TIMEOUT_FUNCTION);
+                ACTION_TIMEOUT_FUNCTION = setTimeout(function(){
+
+                    console.log("No response from this player, so folding! Suckers!")
+                    GetCurrentPlayerInAction().last_action = 'fold';
+                    NextPersonOrEnd();
+
+                    }, 10000);
             }
         }
     });
@@ -756,6 +744,14 @@ function BroadcastClientList() {
             client.connection.sendUTF(message);
         }
     });
+}
+
+function OnlyOnePlayerLeft() {
+    let playersLeft = Players.filter(function (player) {
+        return player.stillInTheRunning();
+    });
+
+    return playersLeft.length === 1;
 }
 
 function EndOfBettingRound() {
@@ -873,6 +869,21 @@ function GetBigBlind() {
     return GetNextPlayer(smallBlind);
 }
 
+function NextPersonOrEnd() {
+    setTimeout(function () {
+        if (!DoesEveryoneHasEqualBets()) {
+            MoveInActionToNextPlayer();
+            BroadcastGameState();
+
+            //TODO: log waiting for player name (which is the next player)
+            //TODO: what about player without money?
+        } else {
+            EndOfBettingRound();
+            BroadcastGameState();
+        }
+    }, SLOW_DOWN);
+}
+
 function DoesEveryoneHasEqualBets() {
     let largestBet = gameState.largest_current_bet;
     let allEqualBets = true;
@@ -895,25 +906,40 @@ function DoesEveryoneHasEqualBets() {
 function CalculateRanking() {
     let ranking = [];
     let flop = gameState.board.join(' ');
-    Players.forEach(function (player) {
-        if (player.last_action !== 'fold') {
-            let cards = player.hole_cards.join(' ') + ' ' + flop;
-            const rank = rankBoard(cards);
-            const description = rankDescription[rank];
 
-            console.log("Player:", player.name);
-            console.log('%s is a %s', cards, description);
-            console.log('Rank ' + rank);
+    if (OnlyOnePlayerLeft()) {
+        let winner = Players.filter(function (player) {
+            return player.stillInTheRunning();
+        })[0];
 
-            ranking.push({
-                uuid: player.uuid,
-                name: player.name,
-                cards: cards,
-                description: description,
-                rank: rank
-            });
-        }
-    });
+        ranking.push({
+            uuid: winner.uuid,
+            name: winner.name,
+            description: "Single survivor",
+            rank: 1
+        });
+    } else {
+        Players.forEach(function (player) {
+            if (player.last_action !== 'fold') {
+                let cards = player.hole_cards.join(' ') + ' ' + flop;
+                const rank = rankBoard(cards);
+                const description = rankDescription[rank];
+
+                console.log("Player:", player.name);
+                console.log('%s is a %s', cards, description);
+                console.log('Rank ' + rank);
+
+                ranking.push({
+                    uuid: player.uuid,
+                    name: player.name,
+                    cards: cards,
+                    description: description,
+                    rank: rank
+                });
+            }
+        });
+
+    }
 
     //Sort on ranking
     ranking.sort((a, b) => (a.rank > b.rank) ? 1 : -1);
@@ -926,10 +952,12 @@ function GetNewGameId() {
 }
 
 function EndHand() {
+    console.log("END of hand");
     CalculateRanking();
     DividePots();
     BroadCastEndOfHand();
     gameState.hand_started = false;
+    gameState.in_action = -1;
     BroadcastGameState();
 
     ClearPlayerSpecificGameState();

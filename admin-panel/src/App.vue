@@ -8,6 +8,9 @@
 
       <h2>Game ID: {{ gamestate.game_id }}</h2>
 
+      <div v-if="gamestate.game_started" class="larget-bet" >Largest bet: {{ gamestate.largest_current_bet }}</div>
+      <div v-if="gamestate.game_started" class="minimal-bet" >Minimal bet: {{ gamestate.minimum_raise }}</div>
+
       <div class="table container">
         <div class="players row">
           <div
@@ -16,7 +19,7 @@
             <div class="name">{{ player.name }} ({{player.id}}) <img class="dealer-button"
                                                                      src="./assets/dealer-button.png"
                                                                      v-if="player.id === gamestate.dealer"/></div>
-            <div class="chips-stack">{{ player.stack }}</div>
+            <div v-if="gamestate.game_started" class="chips-stack">{{ player.stack }}</div>
 
             <div :class="['hole-cards', `hole-cards--${player.status}`, `hole-cards--${player.last_action}`]">
               <div class="playing-card" v-for="card in player.hole_cards">
@@ -24,14 +27,12 @@
               </div>
             </div>
 
-            <div class="bet">{{ player.bet }} - {{ player.last_action }}</div>
+            <div v-if="gamestate.game_started" class="bet">{{ player.bet }} - {{ player.last_action }}</div>
 
           </div>
         </div>
 
-        <div class="pot" v-for="pot in gamestate.pots">Pot: {{ pot.size }}, Players: {{ pot.eligle_players }}</div>
-
-        <div class="larget-bet">Largest bet: {{ gamestate.largest_current_bet }}</div>
+        <div v-if="gamestate.game_started" class="pot" v-for="pot in gamestate.pots">Pot: {{ pot.size }}, Players: {{ pot.eligle_players }}</div>
 
         <div class="board row">
           <div class="playing-card" v-for="card in gamestate.board">
