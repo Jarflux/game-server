@@ -35,9 +35,9 @@
 
     <br /><br />
     <button v-on:click="startGame" v-if="connection.joined">Start game</button>
-    <button v-on:click="startRound" v-if="connection.joined">Start round</button>
-    <button v-on:click="nextCardsAndBet" v-if="connection.joined && gamestate.dealer !== -1 && gamestate.in_action === -1 && gamestate.board.length < 5">Next move & start bet</button>
-    <button v-on:click="nextCardsAndBet" v-if="connection.joined && gamestate.dealer !== -1 && gamestate.in_action === -1 && gamestate.board.length === 5 && gamestate.ranking.length === 0">Get ranking & assign pot</button>
+    <button v-on:click="startHand" v-if="connection.joined">Start hand</button>
+    <button v-on:click="nextBettingRound" v-if="connection.joined && gamestate.dealer !== -1 && gamestate.in_action === -1 && gamestate.board.length < 5">Next betting round</button>
+    <button v-on:click="nextBettingRound" v-if="connection.joined && gamestate.dealer !== -1 && gamestate.in_action === -1 && gamestate.board.length === 5 && gamestate.ranking.length === 0">Get ranking & assign pot</button>
 
     <div class="ranking" v-if="gamestate.ranking.length > 0">
       <h3>Ranking</h3>
@@ -95,12 +95,12 @@
             const data = { action:'new_game', api_key: API_KEY };
             this.$socket.sendObj(data);
         },
-        startRound: function(val) {
-            const data = { action:'new_round', api_key: API_KEY };
+        startHand: function(val) {
+            const data = { action:'new_hand', api_key: API_KEY };
             this.$socket.sendObj(data);
         },
-        nextCardsAndBet: function(val) {
-            const data = { action:'next_cards_and_bet', api_key: API_KEY };
+        nextBettingRound: function(val) {
+            const data = { action:'next_betting_round', api_key: API_KEY };
             this.$socket.sendObj(data);
         }
     },

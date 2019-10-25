@@ -222,7 +222,7 @@ wsServer.on('request', function (request) {
 
                     break;
 
-                case 'new_round':
+                case 'new_hand':
                     //TODO: validate if this is an allowed action (towards the game state)
                     if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
                         NewDeck();
@@ -248,7 +248,7 @@ wsServer.on('request', function (request) {
                     }
                     break;
 
-                case 'next_cards_and_bet':
+                case 'next_betting_round':
                     if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
                         console.log("Next step in the game");
 
