@@ -5,6 +5,8 @@ const crypto = require('crypto');
 const {rankBoard, rankDescription} = require('phe')
 
 const SLOW_DOWN = 1000;
+const TIME_TO_WAIT_FOR_RESPONSE = 10000;
+const AUTO_ROUND = true;
 
 let gameState = require('./initial-game-state.json');
 
@@ -240,6 +242,13 @@ wsServer.on('request', function (request) {
 
                         //TODO what if still bets are open when starting new round? give back the money?   // Should not be the case
 
+                        //enable all players that are waiting?
+                        Players.forEach(function (playerToActivate) {
+                            if (playerToActivate.status === 'waiting') {
+                                playerToActivate.status = 'active';
+                            }
+                        });
+
                         EraseHoleCardsForAllPlayers();
                         gameState.board = [];
 
@@ -265,37 +274,7 @@ wsServer.on('request', function (request) {
                     if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
                         console.log("Next step in the game");
 
-                        if (OnlyOnePlayerLeft()) {
-                            gameState.end_of_hand = true;
-                            BroadcastGameState();
-                        } else if (gameState.board.length === 0) {
-                            console.log("FLOP");
-                            BurnOneCard();
-                            ProvideBoardCards(3);
-                            ResetLastActionForAllPlayers();
-                            gameState.largest_current_bet = 0;
-                            ActivateGame();
-                            BroadcastGameState();
-                        } else if (gameState.board.length === 3) {
-                            console.log("TURN");
-                            BurnOneCard();
-                            ProvideBoardCards(1);
-                            ResetLastActionForAllPlayers();
-                            gameState.largest_current_bet = 0;
-                            ActivateGame();
-                            BroadcastGameState();
-                        } else if (gameState.board.length === 4) {
-                            console.log("RIVER");
-                            BurnOneCard();
-                            ProvideBoardCards(1);
-                            ResetLastActionForAllPlayers();
-                            gameState.largest_current_bet = 0;
-                            ActivateGame();
-                            BroadcastGameState();
-                        } else if (gameState.board.length === 5) {
-                            gameState.end_of_hand = true;
-                            BroadcastGameState();
-                        }
+                        ProceedToNextRound();
                     }
                     break;
 
@@ -514,6 +493,40 @@ function ProvideBoardCards(count) {
     }
 }
 
+function ProceedToNextRound() {
+    if (OnlyOnePlayerLeft()) {
+        gameState.end_of_hand = true;
+        BroadcastGameState();
+    } else if (gameState.board.length === 0) {
+        console.log("FLOP");
+        BurnOneCard();
+        ProvideBoardCards(3);
+        ResetLastActionForAllPlayers();
+        gameState.largest_current_bet = 0;
+        ActivateGame();
+        BroadcastGameState();
+    } else if (gameState.board.length === 3) {
+        console.log("TURN");
+        BurnOneCard();
+        ProvideBoardCards(1);
+        ResetLastActionForAllPlayers();
+        gameState.largest_current_bet = 0;
+        ActivateGame();
+        BroadcastGameState();
+    } else if (gameState.board.length === 4) {
+        console.log("RIVER");
+        BurnOneCard();
+        ProvideBoardCards(1);
+        ResetLastActionForAllPlayers();
+        gameState.largest_current_bet = 0;
+        ActivateGame();
+        BroadcastGameState();
+    } else if (gameState.board.length === 5) {
+        gameState.end_of_hand = true;
+        BroadcastGameState();
+    }
+}
+
 // -----------------------------------------------------------
 // List of all players
 // -----------------------------------------------------------
@@ -590,7 +603,7 @@ function AddOrReplacePlayer(playerToAdd) {
         newPlayerList.push(playerToAdd);
 
         if (gameState.game_started === true) {
-            playerToAdd.status = "inactive";
+            playerToAdd.status = "waiting";
         }
     }
 
@@ -713,7 +726,7 @@ function BroadcastGameState() {
                     GetCurrentPlayerInAction().last_action = 'fold';
                     NextPersonOrEnd();
 
-                    }, 10000);
+                    }, TIME_TO_WAIT_FOR_RESPONSE);
             }
         }
     });
@@ -880,6 +893,9 @@ function NextPersonOrEnd() {
         } else {
             EndOfBettingRound();
             BroadcastGameState();
+            if (AUTO_ROUND) {
+                ProceedToNextRound();
+            }
         }
     }, SLOW_DOWN);
 }
@@ -920,7 +936,7 @@ function CalculateRanking() {
         });
     } else {
         Players.forEach(function (player) {
-            if (player.last_action !== 'fold') {
+            if (player.last_action !== 'fold' && player.status !== 'waiting') {
                 let cards = player.hole_cards.join(' ') + ' ' + flop;
                 const rank = rankBoard(cards);
                 const description = rankDescription[rank];

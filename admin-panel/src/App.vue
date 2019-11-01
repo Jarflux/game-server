@@ -12,6 +12,9 @@
       <div v-if="gamestate.game_started" class="minimal-bet" >Minimal bet: {{ gamestate.minimum_raise }}</div>
 
       <div class="table container">
+        <div v-if="gamestate.players.length <= 1">
+          Waiting for players.
+        </div>
         <div class="players row">
           <div
             :class="['player', `player--${player.status}`, (player.id === gamestate.in_action) ? 'player--in_action' : '']"
@@ -65,7 +68,7 @@
 
     <div class="ranking" v-if="gamestate.ranking.length > 0">
       <h3>Ranking</h3>
-      <ol>
+      <ol class="ranking-list">
         <li v-for="rank in gamestate.ranking">{{ rank.name }} - {{ rank.description }} ({{ rank.rank }})</li>
       </ol>
     </div>
@@ -249,6 +252,10 @@
           color: red;
         }
 
+        &--waiting {
+          color: orange;
+        }
+
         .name {
           font-size: 24px;
           line-height: 40px;
@@ -285,5 +292,14 @@
 
       margin: 40px;
     }
+  }
+
+  .ranking {
+    margin-top: 30px;
+  }
+
+  .ranking-list {
+    width: 300px;
+    margin: 0 auto
   }
 </style>
