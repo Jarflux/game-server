@@ -35,7 +35,7 @@
 
         <div class="board row">
           <div class="playing-card" v-for="card in gamestate.board">
-            <vue-playing-card height="90" v-bind:signature="card" style="width:100px;"></vue-playing-card>
+            <vue-playing-card v-bind:signature="card" style="width:100px;"></vue-playing-card>
           </div>
         </div>
       </div>

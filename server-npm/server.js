@@ -939,10 +939,26 @@ function EndHand() {
 
 function DividePots() {
     gameState.pots.forEach(function (pot) {
-        let player = Players.filter(function (player) {
-            return player.uuid === gameState.ranking[0].uuid
-        })[0];
-        player.stack += pot.size;
+        // get the best hand
+        winningRank = gameState.ranking[0].rank;
+
+        // Get all the rankings that match the hand for a split pot
+        winners = gameState.ranking.filter(function (player) {
+            return player.rank === winningRank;
+        });
+
+        // Check each player if they are entitled to a part of the pot
+        Players.forEach(function (player) {
+            winners.forEach(function (winner) {
+                if(player.uuid === winner.uuid){
+                    let equalPartOfThePot = pot.size / winners.length;
+                    console.log(winner.name + " wins " + equalPartOfThePot + " chips with " + winner.description);
+                    // give a player a port of the pot divided equally among winners
+                    player.stack += equalPartOfThePot;
+                }
+            })
+        });
+
         pot.size = 0;
     });
 }
