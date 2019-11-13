@@ -8,7 +8,13 @@
 
       <h2>Game ID: {{ gamestate.game_id }}</h2>
 
+      <div v-if="gamestate.game_started" class="larget-bet" >Largest bet: {{ gamestate.largest_current_bet }}</div>
+      <div v-if="gamestate.game_started" class="minimal-bet" >Minimal bet: {{ gamestate.minimum_raise }}</div>
+
       <div class="table container">
+        <div v-if="gamestate.players.length <= 1">
+          Waiting for players.
+        </div>
         <div class="players row">
           <div
             :class="['player', `player--${player.status}`, (player.id === gamestate.in_action) ? 'player--in_action' : '']"
@@ -16,7 +22,7 @@
             <div class="name">{{ player.name }} ({{player.id}}) <img class="dealer-button"
                                                                      src="./assets/dealer-button.png"
                                                                      v-if="player.id === gamestate.dealer"/></div>
-            <div class="chips-stack">{{ player.stack }}</div>
+            <div v-if="gamestate.game_started" class="chips-stack">{{ player.stack }}</div>
 
             <div :class="['hole-cards', `hole-cards--${player.status}`, `hole-cards--${player.last_action}`]">
               <div class="playing-card" v-for="card in player.hole_cards">
@@ -24,14 +30,12 @@
               </div>
             </div>
 
-            <div class="bet">{{ player.bet }} - {{ player.last_action }}</div>
+            <div v-if="gamestate.game_started" class="bet">{{ player.bet }} - {{ player.last_action }}</div>
 
           </div>
         </div>
 
-        <div class="pot" v-for="pot in gamestate.pots">Pot: {{ pot.size }}, Players: {{ pot.eligle_players }}</div>
-
-        <div class="larget-bet">Largest bet: {{ gamestate.largest_current_bet }}</div>
+        <div v-if="gamestate.game_started" class="pot" v-for="pot in gamestate.pots">Pot: {{ pot.size }}, Players: {{ pot.eligle_players }}</div>
 
         <div class="board row">
           <div class="playing-card" v-for="card in gamestate.board">
@@ -64,7 +68,7 @@
 
     <div class="ranking" v-if="gamestate.ranking.length > 0">
       <h3>Ranking</h3>
-      <ol>
+      <ol class="ranking-list">
         <li v-for="rank in gamestate.ranking">{{ rank.name }} - {{ rank.description }} ({{ rank.rank }})</li>
       </ol>
     </div>
@@ -248,6 +252,10 @@
           color: red;
         }
 
+        &--waiting {
+          color: orange;
+        }
+
         .name {
           font-size: 24px;
           line-height: 40px;
@@ -284,5 +292,14 @@
 
       margin: 40px;
     }
+  }
+
+  .ranking {
+    margin-top: 30px;
+  }
+
+  .ranking-list {
+    width: 300px;
+    margin: 0 auto
   }
 </style>
