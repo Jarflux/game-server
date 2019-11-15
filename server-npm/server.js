@@ -8,6 +8,7 @@ const SLOW_DOWN = 1000;
 const TIME_TO_WAIT_FOR_RESPONSE = 10000;
 const AUTO_ROUND = true;
 const STARTING_CHIP_STACK = 1000;
+const ENABLE_SERVER_LOGS = true;
 
 let gameState = require('./initial-game-state.json');
 
@@ -99,7 +100,7 @@ wsServer.on('request', function (request) {
                         player.api_key = message.api_key;
                         client.api_key = message.api_key;
 
-                        console.log("Player joined the game:", client.name);
+                        writeToChat(client.name + " joined the game", );
 
                         player.id = Players.length;
                         AddOrReplacePlayer(player);
@@ -123,7 +124,7 @@ wsServer.on('request', function (request) {
                 case 'unjoin':
                     if (isValidPlayerApiKey(message.api_key)) {
                         client.status = 'not-joined';
-                        console.log(client.name + " unjoined the game!");
+                        writeToChat(client.name + " unjoined the game!");
 
                         client.connection.sendUTF(JSON.stringify({
                             'action': 'success',
@@ -135,7 +136,7 @@ wsServer.on('request', function (request) {
                         BroadcastGameState();
                     } else if (isValidObserverApiKey(message.api_key)) {
                         client.status = 'not-joined';
-                        console.log(client.name + " unjoined the game!");
+                        writeToChat(client.name + " unjoined the game!");
 
                         client.connection.sendUTF(JSON.stringify({
                             'action': 'success',
@@ -143,7 +144,7 @@ wsServer.on('request', function (request) {
                         }));
                     } else if (isValidAdminApiKey(message.api_key)) {
                         client.status = 'not-joined';
-                        console.log(client.name + " unjoined the game!");
+                        writeToChat(client.name + " unjoined the game!");
 
                         client.connection.sendUTF(JSON.stringify({
                             'action': 'success',
@@ -168,7 +169,7 @@ wsServer.on('request', function (request) {
 
                         client.api_key = message.api_key;
 
-                        console.log("Observer joined the game:", client.name);
+                        writeToChat(client.name + " joined as an Observer");
                         client.connection.sendUTF(JSON.stringify({
                             'action': 'success',
                             'data': 'joined'
@@ -243,8 +244,6 @@ wsServer.on('request', function (request) {
                         NewDeck();
                         console.log("Cards", Cards);
 
-                        //TODO what if still bets are open when starting new round? give back the money?   // Should not be the case
-
                         //enable all players that are waiting?
                         Players.forEach(function (playerToActivate) {
                             if (playerToActivate.status === 'waiting') {
@@ -275,8 +274,6 @@ wsServer.on('request', function (request) {
 
                 case 'next_betting_round':
                     if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
-                        console.log("Next step in the game");
-
                         ProceedToNextRound();
                     }
                     break;
@@ -292,11 +289,11 @@ wsServer.on('request', function (request) {
                     if (player.id === gameState.in_action) {
                         clearTimeout(ACTION_TIMEOUT_FUNCTION);
                         if (gameState.largest_current_bet === 0) {
-                            console.log("Action for ", player.name, "(CHECK)");
+                            writeToChat(player.name + " checks");
                             player.setBet(gameState.largest_current_bet);
                             player.last_action = 'check';
                         } else {
-                            console.log("Action for ", player.name, "(CALL)");
+                            writeToChat(player.name + " calls");
                             player.setBet(gameState.largest_current_bet);
                             player.last_action = 'call';
                         }
@@ -328,13 +325,13 @@ wsServer.on('request', function (request) {
                         clearTimeout(ACTION_TIMEOUT_FUNCTION);
 
                         if (gameState.largest_current_bet === message.data) {
-                            console.log("Action for ", player.name, "(CALL)", message.data);
+                            writeToChat(player.name + " calls");
 
                             //TODO: valid bet?
                             player.setBet(message.data); //TODO: set or increment?
                             player.last_action = 'call';
                         } else {
-                            console.log("Action for ", player.name, "(RAISE)", message.data);
+                            writeToChat(player.name + " raises " + message.data);
 
                             //TODO: valid bet?
                             player.setBet(message.data); //TODO: set or increment?
@@ -360,7 +357,7 @@ wsServer.on('request', function (request) {
 
                 case 'fold': //{'action': 'fold'}
                     if (player.id === gameState.in_action) {
-                        console.log("Action for ", player.name, "(FOLD)");
+                        writeToChat(player.name + " folds");
                         clearTimeout(ACTION_TIMEOUT_FUNCTION);
 
                         player.last_action = 'fold';
@@ -501,7 +498,7 @@ function ProceedToNextRound() {
         gameState.end_of_hand = true;
         BroadcastGameState();
     } else if (gameState.board.length === 0) {
-        console.log("FLOP");
+        writeToChat("FLOP");
         BurnOneCard();
         ProvideBoardCards(3);
         ResetLastActionForAllPlayers();
@@ -509,7 +506,7 @@ function ProceedToNextRound() {
         ActivateGame();
         BroadcastGameState();
     } else if (gameState.board.length === 3) {
-        console.log("TURN");
+        writeToChat("TURN");
         BurnOneCard();
         ProvideBoardCards(1);
         ResetLastActionForAllPlayers();
@@ -517,7 +514,7 @@ function ProceedToNextRound() {
         ActivateGame();
         BroadcastGameState();
     } else if (gameState.board.length === 4) {
-        console.log("RIVER");
+        writeToChat("RIVER");
         BurnOneCard();
         ProvideBoardCards(1);
         ResetLastActionForAllPlayers();
@@ -585,7 +582,7 @@ function AddOrReplacePlayer(playerToAdd) {
     let addedPlayer = false;
     Players.forEach(function (player) {
         if (player.api_key === playerToAdd.api_key) {
-            console.log("Player rejoined the game");
+            writeToChat("Player rejoined the game");
             playerToAdd.status = 'active';
             playerToAdd.id = player.id;
             playerToAdd.stack = player.stack;
@@ -725,7 +722,7 @@ function BroadcastGameState() {
                 clearTimeout(ACTION_TIMEOUT_FUNCTION);
                 ACTION_TIMEOUT_FUNCTION = setTimeout(function () {
 
-                    console.log("No response from this player, so folding! Suckers!")
+                    writeToChat("No response from this player, so folding! Suckers!");
                     GetCurrentPlayerInAction().last_action = 'fold';
                     NextPersonOrEnd();
 
@@ -828,7 +825,6 @@ function GetCurrentPlayerInAction() {
 function MoveInActionToNextPlayer() {
     let nextPlayer = GetNextActivePlayer(GetCurrentPlayerInAction());
     gameState.in_action = nextPlayer.id;
-    console.log("next player is", nextPlayer.name)
 }
 
 function ResetLastActionForAllPlayers() {
@@ -944,9 +940,7 @@ function CalculateRanking() {
                 const rank = rankBoard(cards);
                 const description = rankDescription[rank];
 
-                console.log("Player:", player.name);
-                console.log('%s is a %s', cards, description);
-                console.log('Rank ' + rank);
+                writeToChat(player.name + " has " + description + "(" + rank + ") [" + cards + "]");
 
                 ranking.push({
                     uuid: player.uuid,
@@ -999,7 +993,7 @@ function DividePots() {
             winners.forEach(function (winner) {
                 if (player.uuid === winner.uuid) {
                     let equalPartOfThePot = pot.size / winners.length;
-                    console.log(winner.name + " wins " + equalPartOfThePot + " chips with " + winner.description);
+                    writeToChat(winner.name + " wins " + equalPartOfThePot + " chips with " + winner.description);
                     // give a player a port of the pot divided equally among winners
                     player.stack += equalPartOfThePot;
                 }
@@ -1048,16 +1042,25 @@ function ValidateTotalChipCount() {  // Check if all chips are accounted for
         let expectedChipsTotal = Players.length * STARTING_CHIP_STACK;
         Players.forEach(function (player) {
             totalChips += player.stack;
-            //totalChips += player.bet;
         });
         gameState.pots.forEach(function (pot) {
             totalChips += pot.size;
         });
 
         if (totalChips !== expectedChipsTotal) {
-            console.log("[ERROR] CHIP COUNT FAILED: " + (expectedChipsTotal - totalChips) + " chips are missing")
+            writeToChat("[ERROR] CHIP COUNT FAILED: " + (expectedChipsTotal - totalChips) + " chips are missing")
         }
     }
+}
+
+function writeToChat(msg){
+    if(ENABLE_SERVER_LOGS){
+        console.log(msg);
+    }
+    gameState.chat.push({
+        timestamp: Date.now(),
+        msg: msg
+    });
 }
 
 
