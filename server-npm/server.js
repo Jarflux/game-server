@@ -1077,6 +1077,7 @@ function RemovePlayersWithoutChips() {  // Bust all players without chips
             gameState.final_ranking.push(player);
         }
     });
+    //TODO Also remove the player from the gamestate players?
 }
 
 
