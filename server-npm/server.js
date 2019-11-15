@@ -7,6 +7,7 @@ const {rankBoard, rankDescription} = require('phe')
 const SLOW_DOWN = 1000;
 const TIME_TO_WAIT_FOR_RESPONSE = 10000;
 const AUTO_ROUND = true;
+const STARTING_CHIP_STACK = 1000;
 
 let gameState = require('./initial-game-state.json');
 
@@ -85,6 +86,8 @@ wsServer.on('request', function (request) {
             //console.log('Received Message: ' + data.utf8Data);
 
             var message = JSON.parse(data.utf8Data);
+            ValidateTotalChipCount();
+
             switch (message.action) {
 
                 case 'join':
@@ -210,7 +213,7 @@ wsServer.on('request', function (request) {
                     //TODO: validate if this is an allowed action (towards the game state)
                     if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
                         ShufflePlayers();
-                        IncreaseStackForAllPlayers(1000);
+                        IncreaseStackForAllPlayers();
 
                         gameState.game_id = GetNewGameId();
 
@@ -362,7 +365,7 @@ wsServer.on('request', function (request) {
 
                         player.last_action = 'fold';
 
-                        gameState.pots[0].eligle_players = gameState.pots[0].eligle_players.filter(function(index){
+                        gameState.pots[0].eligle_players = gameState.pots[0].eligle_players.filter(function (index) {
                             return index !== player.id;
                         });
 
@@ -720,13 +723,13 @@ function BroadcastGameState() {
                 client_to_send_your_turn.connection.sendUTF(message2);
 
                 clearTimeout(ACTION_TIMEOUT_FUNCTION);
-                ACTION_TIMEOUT_FUNCTION = setTimeout(function(){
+                ACTION_TIMEOUT_FUNCTION = setTimeout(function () {
 
                     console.log("No response from this player, so folding! Suckers!")
                     GetCurrentPlayerInAction().last_action = 'fold';
                     NextPersonOrEnd();
 
-                    }, TIME_TO_WAIT_FOR_RESPONSE);
+                }, TIME_TO_WAIT_FOR_RESPONSE);
             }
         }
     });
@@ -805,9 +808,9 @@ function ShufflePlayers() {
     });
 }
 
-function IncreaseStackForAllPlayers(credits) {
+function IncreaseStackForAllPlayers() {
     Players.forEach(function (player) {
-        player.stack = player.stack + credits;
+        player.stack = player.stack + STARTING_CHIP_STACK;
     });
 }
 
@@ -994,7 +997,7 @@ function DividePots() {
         // Check each player if they are entitled to a part of the pot
         Players.forEach(function (player) {
             winners.forEach(function (winner) {
-                if(player.uuid === winner.uuid){
+                if (player.uuid === winner.uuid) {
                     let equalPartOfThePot = pot.size / winners.length;
                     console.log(winner.name + " wins " + equalPartOfThePot + " chips with " + winner.description);
                     // give a player a port of the pot divided equally among winners
@@ -1037,6 +1040,24 @@ function BroadCastEndOfHand() {
 
 function ClearRanking() {
     gameState.ranking = [];
+}
+
+function ValidateTotalChipCount() {  // Check if all chips are accounted for
+    if (gameState.game_started) {
+        let totalChips = 0;
+        let expectedChipsTotal = Players.length * STARTING_CHIP_STACK;
+        Players.forEach(function (player) {
+            totalChips += player.stack;
+            //totalChips += player.bet;
+        });
+        gameState.pots.forEach(function (pot) {
+            totalChips += pot.size;
+        });
+
+        if (totalChips !== expectedChipsTotal) {
+            console.log("[ERROR] CHIP COUNT FAILED: " + (expectedChipsTotal - totalChips) + " chips are missing")
+        }
+    }
 }
 
 
