@@ -135,7 +135,20 @@ Every player will only see his own hole_cards and api_key.
 			"timestamp": 1573771593227,
 			"msg": "Anne wins 500 chips with Three of a kind"
 		}
-	]
+	],
+	"final_ranking": [{
+		"id": 0,
+		"uuid": "CpTKgYbvJhXrUBXdPLM64g==",
+		"name": "Anne"
+	}, {
+		"id": 1,
+		"uuid": "CpTKgYbvJhXrUBXdPLM64g==",
+		"name": "Ben"
+	}, {
+		"id": 2,
+		"uuid": "CpTKgYbvJhXrUBXdPLM64g==",
+		"name": "Charlotte"
+	}]
 
 }
 ```

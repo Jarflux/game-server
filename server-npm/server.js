@@ -100,7 +100,7 @@ wsServer.on('request', function (request) {
                         player.api_key = message.api_key;
                         client.api_key = message.api_key;
 
-                        writeToChat(client.name + " joined the game", );
+                        writeToChat(client.name + " joined the game",);
 
                         player.id = Players.length;
                         AddOrReplacePlayer(player);
@@ -244,7 +244,6 @@ wsServer.on('request', function (request) {
                         writeToChat("Starting new hand");
                         NewDeck();
                         console.log("Cards", Cards);
-
 
                         //enable all players that are waiting?
                         Players.forEach(function (playerToActivate) {
@@ -519,7 +518,7 @@ function ProceedToNextRound() {
     } else if (gameState.board.length === 4) {
         BurnOneCard();
         ProvideBoardCards(1);
-        writeToChat("Dealing the river " + gameState.board );
+        writeToChat("Dealing the river " + gameState.board);
         ResetLastActionForAllPlayers();
         gameState.largest_current_bet = 0;
         ActivateGame();
@@ -982,6 +981,8 @@ function EndHand() {
     ClearPlayerSpecificGameState();
     ClearSharedGameState();
     ClearRanking();
+
+    RemovePlayersWithoutChips();
 }
 
 function DividePots() {
@@ -1059,13 +1060,22 @@ function ValidateTotalChipCount() {  // Check if all chips are accounted for
     }
 }
 
-function writeToChat(msg){
-    if(ENABLE_SERVER_LOGS){
+function writeToChat(msg) {
+    if (ENABLE_SERVER_LOGS) {
         console.log(msg);
     }
     gameState.chat.push({
         timestamp: Date.now(),
         msg: msg
+    });
+}
+
+function RemovePlayersWithoutChips() {  // Bust all players without chips
+    Players.forEach(function (player) {
+        if(player.stack === 0){
+            player.status = 'busted';
+            gameState.final_ranking.push(player);
+        }
     });
 }
 
