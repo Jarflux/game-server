@@ -183,7 +183,6 @@
             }
             break;
           case "end_of_hand":
-            console.log("End of game");
             gamestate.ranking = message.data;
             break;
           default:

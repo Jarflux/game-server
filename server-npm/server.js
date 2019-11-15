@@ -2,7 +2,7 @@
 var WebSocketServer = require('websocket').server;
 var http = require('http');
 const crypto = require('crypto');
-const {rankBoard, rankDescription} = require('phe')
+const {rankBoard, rankDescription} = require('phe');
 
 const SLOW_DOWN = 1000;
 const TIME_TO_WAIT_FOR_RESPONSE = 10000;
@@ -241,8 +241,10 @@ wsServer.on('request', function (request) {
                 case 'new_hand':
                     //TODO: validate if this is an allowed action (towards the game state)
                     if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
+                        writeToChat("Starting new hand");
                         NewDeck();
                         console.log("Cards", Cards);
+
 
                         //enable all players that are waiting?
                         Players.forEach(function (playerToActivate) {
@@ -259,6 +261,7 @@ wsServer.on('request', function (request) {
                         gameState.largest_current_bet = 0;
                         gameState.end_of_hand = false;
 
+                        writeToChat("Dealing hole cards");
                         ProvideOneCardToAllPlayers();
                         ProvideOneCardToAllPlayers();
 
@@ -288,12 +291,12 @@ wsServer.on('request', function (request) {
                 case 'call': //{'action': 'call'}
                     if (player.id === gameState.in_action) {
                         clearTimeout(ACTION_TIMEOUT_FUNCTION);
-                        if (gameState.largest_current_bet === 0) {
+                        if (gameState.largest_current_bet === 0 || gameState.largest_current_bet === player.bet) {
                             writeToChat(player.name + " checks");
                             player.setBet(gameState.largest_current_bet);
                             player.last_action = 'check';
                         } else {
-                            writeToChat(player.name + " calls");
+                            writeToChat(player.name + " calls " + gameState.largest_current_bet);
                             player.setBet(gameState.largest_current_bet);
                             player.last_action = 'call';
                         }
@@ -325,7 +328,7 @@ wsServer.on('request', function (request) {
                         clearTimeout(ACTION_TIMEOUT_FUNCTION);
 
                         if (gameState.largest_current_bet === message.data) {
-                            writeToChat(player.name + " calls");
+                            writeToChat(player.name + " calls " + gameState.largest_current_bet);
 
                             //TODO: valid bet?
                             player.setBet(message.data); //TODO: set or increment?
@@ -498,25 +501,25 @@ function ProceedToNextRound() {
         gameState.end_of_hand = true;
         BroadcastGameState();
     } else if (gameState.board.length === 0) {
-        writeToChat("FLOP");
         BurnOneCard();
         ProvideBoardCards(3);
+        writeToChat("Dealing the flop " + gameState.board);
         ResetLastActionForAllPlayers();
         gameState.largest_current_bet = 0;
         ActivateGame();
         BroadcastGameState();
     } else if (gameState.board.length === 3) {
-        writeToChat("TURN");
         BurnOneCard();
         ProvideBoardCards(1);
+        writeToChat("Dealing the turn " + gameState.board);
         ResetLastActionForAllPlayers();
         gameState.largest_current_bet = 0;
         ActivateGame();
         BroadcastGameState();
     } else if (gameState.board.length === 4) {
-        writeToChat("RIVER");
         BurnOneCard();
         ProvideBoardCards(1);
+        writeToChat("Dealing the river " + gameState.board );
         ResetLastActionForAllPlayers();
         gameState.largest_current_bet = 0;
         ActivateGame();
@@ -622,9 +625,12 @@ function ActivateGame() {
         let smallBlind = GetSmallBlind();
         smallBlind.setBet(gameState.small_blind);
         smallBlind.last_action = "small_blind";
+        writeToChat(smallBlind.name + " posted small blind of " + gameState.small_blind);
+
         let bigBlind = GetBigBlind();
         bigBlind.setBet(gameState.big_blind);
         bigBlind.last_action = "big_blind";
+        writeToChat(bigBlind.name + " posted big blind of " + gameState.big_blind);
 
         let firstPlayerToBet = GetNextPlayer(bigBlind);
         gameState.in_action = firstPlayerToBet.id;
