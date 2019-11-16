@@ -7,7 +7,7 @@ const {rankBoard, rankDescription} = require('phe');
 const SLOW_DOWN = 1000;
 const TIME_TO_WAIT_FOR_RESPONSE = 10000;
 const AUTO_ROUND = true;
-const STARTING_CHIP_STACK = 1000;
+const STARTING_CHIP_STACK = 50;
 const ENABLE_SERVER_LOGS = true;
 
 let gameState = require('./initial-game-state.json');
@@ -481,9 +481,11 @@ function BurnOneCard() {
 
 function ProvideOneCardToAllPlayers() {
     Players.forEach(function (player) {
-        if (player.hole_cards.length < 2) {
-            let card = Cards.shift();
-            player.addHoleCards(card);
+        if (player.status !== "busted") {
+            if (player.hole_cards.length < 2) {
+                let card = Cards.shift();
+                player.addHoleCards(card);
+            }
         }
     });
 }
@@ -561,11 +563,15 @@ Player.prototype = {
     },
     setBet: function (bet) {
         let chipsToAddTobet = bet - this.bet;
+        if(chipsToAddTobet > this.stack){
+            chipsToAddTobet = this.stack;
+        }
+
         if (this.stack >= chipsToAddTobet && bet > 0) {
-            //TODO If player already posted a small/big blind dont subtract the complete bet
             this.bet = bet;
             this.stack = this.stack - chipsToAddTobet;
         }
+
         gameState.pots[0].size = gameState.pots[0].size + chipsToAddTobet;
         if (gameState.pots[0].eligle_players.indexOf(this.id) === -1) {
             gameState.pots[0].eligle_players.push(this.id);
@@ -1072,12 +1078,16 @@ function writeToChat(msg) {
 
 function RemovePlayersWithoutChips() {  // Bust all players without chips
     Players.forEach(function (player) {
-        if(player.stack === 0){
+        if (player.stack === 0) {
+            writeToChat(player.name + " has no chips remaining");
             player.status = 'busted';
             gameState.final_ranking.push(player);
         }
     });
-    //TODO Also remove the player from the gamestate players?
+
+    Players.filter(function (player) {
+        return player.stack !== 0;
+    });
 }
 
 
