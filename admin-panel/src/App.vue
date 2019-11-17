@@ -2,7 +2,19 @@
   <div id="app">
     <div
       :class="['server', (!connection.connected && !connection.joined) ? 'server--disconnected' : '', (connection.connected && !connection.joined) ? 'server--connected' : '', (connection.connected && connection.joined) ? 'server--ready' : '']">
-      <i class="fa fa-circle"></i></div>
+      <i class="fa fa-circle"></i>
+
+      <button v-on:click="join" v-if="!connection.joined">Join</button>
+      <button v-on:click="unjoin" v-if="connection.joined">Unjoin</button>
+    </div>
+
+    <div class="configurator" v-if="gamestate.game_id !== 'start' && connection.connected">
+      <button v-on:click="enableAutoGame" v-if="!adminConfig.autoGame">Enable auto play game</button>
+      <button v-on:click="disableAutoGame" v-if="adminConfig.autoGame">Disable auto play game</button>
+      <br /><br />
+      <button v-on:click="enableAutoHand" v-if="!adminConfig.autoRound">Enable auto play hand</button>
+      <button v-on:click="disableAutoHand" v-if="adminConfig.autoRound">Disable auto play hand</button>
+    </div>
 
     <div v-if="gamestate.game_id !== 'start' && connection.connected">
 
@@ -26,7 +38,7 @@
 
             <div :class="['hole-cards', `hole-cards--${player.status}`, `hole-cards--${player.last_action}`]">
               <div class="playing-card" v-for="card in player.hole_cards">
-                <vue-playing-card v-bind:signature="card" style="width:75px;"></vue-playing-card>
+                <strong>{{ card }} &nbsp;</strong>
               </div>
             </div>
 
@@ -39,17 +51,15 @@
 
         <div class="board row">
           <div class="playing-card" v-for="card in gamestate.board">
-            <vue-playing-card v-bind:signature="card" style="width:100px;"></vue-playing-card>
+            <strong>{{ card }} &nbsp;</strong>
           </div>
         </div>
       </div>
 
+      <hr/>
+
     </div>
 
-    <button v-on:click="join" v-if="!connection.joined">Join</button>
-    <button v-on:click="unjoin" v-if="connection.joined">Unjoin</button>
-
-    <br/><br/>
     <button v-on:click="startGame" v-if="connection.joined && !gamestate.game_started && gamestate.players.length > 1">
       Start game
     </button>
@@ -66,11 +76,34 @@
       Get ranking & assign pot
     </button>
 
+    <hr/>
+
     <div class="ranking" v-if="gamestate.ranking.length > 0">
       <h3>Ranking</h3>
       <ol class="ranking-list">
-        <li v-for="rank in gamestate.ranking">{{ rank.name }} - {{ rank.description }} ({{ rank.rank }})</li>
+        <li v-for="rank in gamestate.ranking">
+          <strong>{{ rank.name }}</strong><br />
+          &nbsp;&nbsp;Cards: {{ rank.cards }}<br />
+          &nbsp;&nbsp;Description: {{ rank.description }}<br />
+          &nbsp;&nbsp;Rank: ({{ rank.rank }})
+        </li>
       </ol>
+
+      <hr/>
+    </div>
+
+    <div>
+      <h3>Score Board</h3>
+      <div v-if="scoreBoard.list.length == 0">No scores yet ...</div>
+
+      <div class="score-board-list">
+        <div v-for="score in scoreBoard.list">
+          <ol class="ranking-list">
+            <li v-for="rank in score">{{ rank.name }} - {{ rank.cards }} - {{ rank.description }} ({{ rank.rank }})</li>
+          </ol>
+        </div>
+      </div>
+
     </div>
   </div>
 </template>
@@ -94,6 +127,15 @@
 
   gamestate.ranking = [];
 
+  let scoreBoard = {
+      list: []
+  };
+
+  let adminConfig = {
+      autoRound: false,
+      autoGame: false
+  }
+
   Vue.use(VueNativeSock, 'ws://localhost:8081', {
     protocol: 'echo-protocol',
     format: 'json',
@@ -110,7 +152,9 @@
     data() {
       return {
         gamestate: gamestate,
-        connection: connection
+        scoreBoard: scoreBoard,
+        connection: connection,
+        adminConfig: adminConfig
       }
     },
     methods: {
@@ -137,6 +181,22 @@
       closeHand: function (val) {
         const data = {action: 'close_hand', api_key: API_KEY};
         this.$socket.sendObj(data);
+      },
+      enableAutoGame: function (val) {
+          const data = {action: 'config_auto_game', data: true, api_key: API_KEY};
+          this.$socket.sendObj(data);
+      },
+      disableAutoGame: function (val) {
+          const data = {action: 'config_auto_game', data: false, api_key: API_KEY};
+          this.$socket.sendObj(data);
+      },
+      enableAutoHand: function (val) {
+          const data = {action: 'config_auto_round', data: true, api_key: API_KEY};
+          this.$socket.sendObj(data);
+      },
+      disableAutoHand: function (val) {
+          const data = {action: 'config_auto_round', data: false, api_key: API_KEY};
+          this.$socket.sendObj(data);
       }
     },
     created() {
@@ -185,6 +245,13 @@
           case "end_of_hand":
             gamestate.ranking = message.data;
             break;
+          case "score_board":
+            scoreBoard.list = message.data;
+            break;
+          case "admin_config":
+            adminConfig.autoGame = message.data.autoGame;
+            adminConfig.autoRound = message.data.autoRound;
+            break;
           default:
             console.log(message);
             break;
@@ -207,6 +274,11 @@
     text-align: center;
     color: #2c3e50;
     margin-top: 60px;
+  }
+
+  .configurator {
+    position: absolute;
+    right: 20px;
   }
 
   .server {
@@ -298,7 +370,9 @@
   }
 
   .ranking-list {
-    width: 300px;
-    margin: 0 auto
+    text-align: left;
+    width: 500px;
+    margin: 0 auto;
+    margin-bottom: 30px;
   }
 </style>

@@ -4,13 +4,17 @@ var http = require('http');
 const crypto = require('crypto');
 const {rankBoard, rankDescription} = require('phe');
 
-const SLOW_DOWN = 1000;
+const SLOW_DOWN = 300;
 const TIME_TO_WAIT_FOR_RESPONSE = 10000;
-const AUTO_ROUND = true;
-const STARTING_CHIP_STACK = 50;
+const STARTING_CHIP_STACK = 1000;
 const ENABLE_SERVER_LOGS = true;
 
+let AUTO_ROUND = true;
+let AUTO_GAME = true;
+
 let gameState = require('./initial-game-state.json');
+
+let scoreBoard = [];
 
 //TODO: set status of player to 'out' if all money is gone
 
@@ -112,6 +116,7 @@ wsServer.on('request', function (request) {
 
                         BroadcastGameState();
                         BroadcastClientList();
+                        BroadcastScoreBoard();
                     } else {
                         console.log("Player had invalid key", client.uuid, client.name);
                         client.connection.sendUTF(JSON.stringify({
@@ -177,6 +182,7 @@ wsServer.on('request', function (request) {
 
                         BroadcastGameState();
                         BroadcastClientList();
+                        BroadcastScoreBoard();
                     } else {
                         console.log("Observer had invalid key", client.uuid, client.name);
                         client.connection.sendUTF(JSON.stringify({
@@ -201,6 +207,8 @@ wsServer.on('request', function (request) {
                         }));
                         BroadcastGameState();
                         BroadcastClientList();
+                        BroadcastScoreBoard();
+                        BroadcastAdminConfig();
                     } else {
                         console.log("Client to join as admin, but had invalid key", client.uuid, client.name);
                         client.connection.sendUTF(JSON.stringify({
@@ -230,6 +238,10 @@ wsServer.on('request', function (request) {
                         //TODO what if still bets are open when starting new game? give back the money?
 
                         BroadcastGameState();
+
+                        if (AUTO_GAME) {
+                            StartNewHand();
+                        }
                     }
                     break;
                 case 'end_game':
@@ -241,36 +253,7 @@ wsServer.on('request', function (request) {
                 case 'new_hand':
                     //TODO: validate if this is an allowed action (towards the game state)
                     if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
-                        writeToChat("Starting new hand");
-                        NewDeck();
-                        console.log("Cards", Cards);
-
-                        //enable all players that are waiting?
-                        Players.forEach(function (playerToActivate) {
-                            if (playerToActivate.status === 'waiting') {
-                                playerToActivate.status = 'active';
-                            }
-                        });
-
-                        EraseHoleCardsForAllPlayers();
-                        gameState.board = [];
-
-                        MoveDealerToNextPlayer();
-                        gameState.in_action = -1;
-                        gameState.largest_current_bet = 0;
-                        gameState.end_of_hand = false;
-
-                        writeToChat("Dealing hole cards");
-                        ProvideOneCardToAllPlayers();
-                        ProvideOneCardToAllPlayers();
-
-                        gameState.hand_started = true;
-
-                        ActivateGame(); //UTG is first player
-                        BroadcastGameState();
-                        //TODO also deduct the bet from the stack (or only at the end?)
-
-                        //TODO: this will give the first turn to player under the gun (first turn should be for player after big blind)
+                        StartNewHand();
                     }
                     break;
 
@@ -283,6 +266,20 @@ wsServer.on('request', function (request) {
                 case 'close_hand':
                     if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
                         EndHand();
+                    }
+                    break;
+
+                case 'config_auto_game':
+                    if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
+                        AUTO_GAME = message.data;
+                        BroadcastAdminConfig();
+                    }
+                    break;
+
+                case 'config_auto_round':
+                    if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
+                        AUTO_ROUND = message.data;
+                        BroadcastAdminConfig();
                     }
                     break;
 
@@ -497,6 +494,39 @@ function ProvideBoardCards(count) {
     }
 }
 
+function StartNewHand() {
+    writeToChat("Starting new hand");
+    NewDeck();
+    console.log("Cards", Cards);
+
+    //enable all players that are waiting?
+    Players.forEach(function (playerToActivate) {
+        if (playerToActivate.status === 'waiting') {
+            playerToActivate.status = 'active';
+        }
+    });
+
+    EraseHoleCardsForAllPlayers();
+    gameState.board = [];
+
+    MoveDealerToNextPlayer();
+    gameState.in_action = -1;
+    gameState.largest_current_bet = 0;
+    gameState.end_of_hand = false;
+
+    writeToChat("Dealing hole cards");
+    ProvideOneCardToAllPlayers();
+    ProvideOneCardToAllPlayers();
+
+    gameState.hand_started = true;
+
+    ActivateGame(); //UTG is first player
+    BroadcastGameState();
+    //TODO also deduct the bet from the stack (or only at the end?)
+
+    //TODO: this will give the first turn to player under the gun (first turn should be for player after big blind)
+}
+
 function ProceedToNextRound() {
     if (OnlyOnePlayerLeft()) {
         gameState.end_of_hand = true;
@@ -528,6 +558,9 @@ function ProceedToNextRound() {
     } else if (gameState.board.length === 5) {
         gameState.end_of_hand = true;
         BroadcastGameState();
+        if (AUTO_GAME) {
+            EndHand();
+        }
     }
 }
 
@@ -748,6 +781,17 @@ function BroadcastGameState() {
     //TODO: for every broadcast, save the game state in a file.
 }
 
+function BroadcastScoreBoard() {
+    //share score board
+    Clients.forEach(function (client) {
+        let message = JSON.stringify({
+            'action': 'score_board',
+            'data': scoreBoard
+        });
+        client.connection.sendUTF(message);
+    });
+}
+
 function BroadcastClientList() {
     let clientList = [];
     Clients.forEach(function (client) {
@@ -764,6 +808,27 @@ function BroadcastClientList() {
             let message = JSON.stringify({
                 'action': 'client_list',
                 'data': clientList
+            });
+            client.connection.sendUTF(message);
+        }
+    });
+}
+
+function BroadcastAdminConfig() {
+
+    let config = {
+        'autoGame': AUTO_GAME,
+        'autoRound': AUTO_ROUND
+    };
+
+    console.log("Admin Config", config);
+
+    //share full game view with observers & admins
+    Clients.forEach(function (client) {
+        if (client.status === 'admin') {
+            let message = JSON.stringify({
+                'action': 'admin_config',
+                'data': config
             });
             client.connection.sendUTF(message);
         }
@@ -984,11 +1049,19 @@ function EndHand() {
     gameState.in_action = -1;
     BroadcastGameState();
 
+    scoreBoard.push(gameState.ranking);
+    BroadcastScoreBoard();
+
+    //reset
     ClearPlayerSpecificGameState();
     ClearSharedGameState();
     ClearRanking();
 
     RemovePlayersWithoutChips();
+
+    if (AUTO_GAME) {
+        StartNewHand();
+    }
 }
 
 function DividePots() {

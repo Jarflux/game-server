@@ -56,6 +56,12 @@ client1.on('connect', function(connection) {
                     console.log("Client list", clientList);
 
                     break;
+
+                case 'score_board':
+                    let scoreBoard = message.data;
+                    console.log("Score Board", scoreBoard);
+
+                    break;
             }
         }
     });
