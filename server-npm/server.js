@@ -1067,10 +1067,10 @@ function EndHand() {
 function DividePots() {
     gameState.pots.forEach(function (pot) {
         // get the best hand
-        winningRank = gameState.ranking[0].rank;
+        let winningRank = gameState.ranking[0].rank;
 
         // Get all the rankings that match the hand for a split pot
-        winners = gameState.ranking.filter(function (player) {
+        let winners = gameState.ranking.filter(function (player) {
             return player.rank === winningRank;
         });
 
@@ -1078,7 +1078,7 @@ function DividePots() {
         Players.forEach(function (player) {
             winners.forEach(function (winner) {
                 if (player.uuid === winner.uuid) {
-                    let equalPartOfThePot = pot.size / winners.length;
+                    let equalPartOfThePot = Math.floor(pot.size / winners.length);
                     writeToChat(winner.name + " wins " + equalPartOfThePot + " chips with " + winner.description);
                     // give a player a port of the pot divided equally among winners
                     player.stack += equalPartOfThePot;
