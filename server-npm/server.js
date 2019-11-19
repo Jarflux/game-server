@@ -287,22 +287,37 @@ wsServer.on('request', function (request) {
                 case 'call': //{'action': 'call'}
                     if (player.id === gameState.in_action) {
                         clearTimeout(ACTION_TIMEOUT_FUNCTION);
-                        if (gameState.largest_current_bet === 0 || gameState.largest_current_bet === player.bet) {
-                            writeToChat(player.name + " checks");
-                            player.setBet(gameState.largest_current_bet);
-                            player.last_action = 'check';
+
+                        if (player.attempt <= 3 && player.isValidBet(gameState.largest_current_bet)) {
+                            if (gameState.largest_current_bet === 0 || gameState.largest_current_bet === player.bet) {
+                                writeToChat(player.name + " checks " + ' in attempt ' + player.attempt);
+                                player.setBet(gameState.largest_current_bet);
+                                player.last_action = 'check';
+                            } else {
+                                writeToChat(player.name + " calls " + gameState.largest_current_bet + ' in attempt ' + player.attempt);
+                                player.setBet(gameState.largest_current_bet);
+                                player.last_action = 'call';
+                            }
+
+                            client.connection.sendUTF(JSON.stringify({
+                                'action': 'success',
+                                'data': 'action-accepted'
+                            }));
+                            player.attempt = 1;
+                            NextPersonOrEnd();
+                        } else if (player.attempt <= 3) {
+                            writeToChat(player.name + " calls/checks " + gameState.largest_current_bet + ', which is not valid. Ask for retry ...');
+                            player.attempt++;
+                            BroadcastYourTurn(); //try again
                         } else {
-                            writeToChat(player.name + " calls " + gameState.largest_current_bet);
-                            player.setBet(gameState.largest_current_bet);
-                            player.last_action = 'call';
+                            writeToChat(player.name + " has a fold due to exceeded wrong attempts.");
+                            player.last_action = 'fold';
+                            player.attempt = 1;
+                            gameState.pots[0].eligle_players = gameState.pots[0].eligle_players.filter(function (index) {
+                                return index !== player.id;
+                            });
+                            NextPersonOrEnd();
                         }
-
-                        client.connection.sendUTF(JSON.stringify({
-                            'action': 'success',
-                            'data': 'action-accepted'
-                        }));
-
-                        NextPersonOrEnd();
                     } else {
                         console.error("It's NOT your turn", player.name);
                         client.connection.sendUTF(JSON.stringify({
@@ -311,12 +326,6 @@ wsServer.on('request', function (request) {
                         }));
                     }
 
-                    //TODO: these actions are applicable to raise & fold as well.
-                    //TODO: was this action accepted?
-                    //TODO retry in case of error?
-                    //TODO; do we send back it's approved and that the client need to confirm?
-                    //TODO what if call, raise is invalid, respond back to client
-                    //TODO if client doesn't respond within 5 seconds, then fold for that player. & move to next player
                     break;
 
                 case 'raise': //{'action': 'raise', 'data': 20}
@@ -324,26 +333,60 @@ wsServer.on('request', function (request) {
                         clearTimeout(ACTION_TIMEOUT_FUNCTION);
 
                         if (gameState.largest_current_bet === message.data) {
-                            writeToChat(player.name + " calls " + gameState.largest_current_bet);
+                            if (player.attempt <= 3 && player.isValidBet(message.data)) {
+                                player.setBet(message.data);
+                                player.last_action = 'call';
 
-                            //TODO: valid bet?
-                            player.setBet(message.data); //TODO: set or increment?
-                            player.last_action = 'call';
+                                writeToChat(player.name + " calls " + gameState.largest_current_bet + ' in attempt ' + player.attempt);
+
+                                client.connection.sendUTF(JSON.stringify({
+                                    'action': 'success',
+                                    'data': 'action-accepted'
+                                }));
+                                player.attempt = 1;
+                                NextPersonOrEnd();
+                            } else if (player.attempt <= 3) {
+                                writeToChat(player.name + " calls " + gameState.largest_current_bet + ', which is not valid. Ask for retry ...');
+                                player.attempt++;
+                                BroadcastYourTurn(); //try again
+                            } else {
+                                writeToChat(player.name + " has a fold due to exceeded wrong attempts.");
+                                player.last_action = 'fold';
+                                player.attempt = 1;
+                                gameState.pots[0].eligle_players = gameState.pots[0].eligle_players.filter(function (index) {
+                                    return index !== player.id;
+                                });
+                                NextPersonOrEnd();
+                            }
                         } else {
-                            writeToChat(player.name + " raises " + message.data);
+                            if (player.attempt <= 3 && player.isValidBet(message.data)) {
+                                player.setBet(message.data);
+                                player.last_action = 'raise';
+                                gameState.pots[0].eligle_players = [player.id];
 
-                            //TODO: valid bet?
-                            player.setBet(message.data); //TODO: set or increment?
-                            player.last_action = 'raise';
-                            gameState.pots[0].eligle_players = [player.id];
+                                writeToChat(player.name + " raises " + message.data + ' in attempt ' + player.attempt);
+
+                                client.connection.sendUTF(JSON.stringify({
+                                    'action': 'success',
+                                    'data': 'action-accepted'
+                                }));
+                                player.attempt = 1;
+                                NextPersonOrEnd();
+                            } else if (player.attempt <= 3) {
+                                writeToChat(player.name + " raises " + message.data + ', which is not valid. Ask for retry ...');
+                                player.attempt++;
+                                BroadcastYourTurn(); //try again
+                            } else {
+                                writeToChat(player.name + " has a fold due to exceeded wrong attempts.");
+                                player.last_action = 'fold';
+                                player.attempt = 1;
+                                gameState.pots[0].eligle_players = gameState.pots[0].eligle_players.filter(function (index) {
+                                    return index !== player.id;
+                                });
+                                NextPersonOrEnd();
+                            }
                         }
 
-                        client.connection.sendUTF(JSON.stringify({
-                            'action': 'success',
-                            'data': 'action-accepted'
-                        }));
-
-                        NextPersonOrEnd();
                     } else {
                         console.error("It's NOT your turn", player.name);
                         client.connection.sendUTF(JSON.stringify({
@@ -360,6 +403,7 @@ wsServer.on('request', function (request) {
                         clearTimeout(ACTION_TIMEOUT_FUNCTION);
 
                         player.last_action = 'fold';
+                        player.attempt = 1;
 
                         gameState.pots[0].eligle_players = gameState.pots[0].eligle_players.filter(function (index) {
                             return index !== player.id;
@@ -533,6 +577,8 @@ function ProceedToNextRound() {
         gameState.end_of_hand = true;
         BroadcastGameState();
         if (AUTO_GAME) {
+            //TODO Michaël: check if other plays still have money
+            //TODO Otherwise broadcast winner
             EndHand();
         }
     } else if (gameState.board.length === 0) {
@@ -593,6 +639,7 @@ function Player(uuid) {
     this.stack = 0;
     this.bet = 0;
     this.last_action = ""; // small_blind, big_blind, call, raise, fold
+    this.attempt = 1;
     this.hole_cards = [];
     this.api_key = '';
 }
@@ -603,7 +650,7 @@ Player.prototype = {
     },
     setBet: function (bet) {
         let chipsToAddTobet = bet - this.bet;
-        if(chipsToAddTobet > this.stack){
+        if (chipsToAddTobet > this.stack){
             chipsToAddTobet = this.stack;
         }
 
@@ -617,6 +664,27 @@ Player.prototype = {
             gameState.pots[0].eligle_players.push(this.id);
         }
         gameState.largest_current_bet = bet;
+        this.attempt = 1;
+    },
+    isValidBet: function (bet) {
+        if (typeof bet === 'undefined') {
+            return false;
+        }
+        if (this.stack === 0) {
+            return false;
+        }
+
+        let chipsToAddTobet = bet - this.bet;
+        if (chipsToAddTobet > this.stack) {
+            chipsToAddTobet = this.stack;
+        }
+
+        //console.log("Valid bet?", chipsToAddTobet, this.stack, bet, this.bet);
+
+        if (this.stack >= chipsToAddTobet) {
+            return true;
+        }
+        return false;
     },
     stillInTheRunning: function () {
         return this.status === 'active' && this.last_action !== 'fold';
@@ -680,6 +748,8 @@ function ActivateGame() {
         let firstPlayerToBet = GetNextPlayer(bigBlind);
         gameState.in_action = firstPlayerToBet.id;
         console.log("First player is", firstPlayerToBet.name)
+
+        gameState.largest_current_bet = firstPlayerToBet.bet;
     } else {
         let dealer = GetDealer();
         let firstPlayerToBet = GetNextActivePlayer(dealer);
@@ -770,6 +840,7 @@ function BroadcastGameState() {
 
 function BroadcastYourTurn() {
     let client_to_send_your_turn = undefined;
+    let attempt = 0;
 
     //share private game view to players
     Clients.forEach(function (client) {
@@ -779,7 +850,7 @@ function BroadcastYourTurn() {
                 if (client.uuid === player.uuid) {
                     if (gameState.in_action === player.id && gameState.in_action !== -1) {
                         client_to_send_your_turn = client;
-
+                        attempt = player.attempt;
                         console.log("Sending Your Turn to: ", player.name);
                     }
                 }
@@ -789,7 +860,8 @@ function BroadcastYourTurn() {
 
     if (client_to_send_your_turn) {
         let message = JSON.stringify({
-            'action': 'your_turn'
+            'action': 'your_turn',
+            'attempt': attempt
         });
         client_to_send_your_turn.connection.sendUTF(message);
 
