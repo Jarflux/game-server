@@ -4,9 +4,9 @@ var http = require('http');
 const crypto = require('crypto');
 const {rankBoard, rankDescription} = require('phe');
 
-const SLOW_DOWN = 300;
+const SLOW_DOWN = 1000;
 const TIME_TO_WAIT_FOR_RESPONSE = 10000;
-const STARTING_CHIP_STACK = 1000;
+const STARTING_CHIP_STACK = 500;
 const ENABLE_SERVER_LOGS = true;
 
 let AUTO_ROUND = true;
@@ -522,6 +522,7 @@ function StartNewHand() {
 
     ActivateGame(); //UTG is first player
     BroadcastGameState();
+    BroadcastYourTurn();
     //TODO also deduct the bet from the stack (or only at the end?)
 
     //TODO: this will give the first turn to player under the gun (first turn should be for player after big blind)
@@ -531,6 +532,9 @@ function ProceedToNextRound() {
     if (OnlyOnePlayerLeft()) {
         gameState.end_of_hand = true;
         BroadcastGameState();
+        if (AUTO_GAME) {
+            EndHand();
+        }
     } else if (gameState.board.length === 0) {
         BurnOneCard();
         ProvideBoardCards(3);
@@ -539,6 +543,7 @@ function ProceedToNextRound() {
         gameState.largest_current_bet = 0;
         ActivateGame();
         BroadcastGameState();
+        BroadcastYourTurn();
     } else if (gameState.board.length === 3) {
         BurnOneCard();
         ProvideBoardCards(1);
@@ -547,6 +552,7 @@ function ProceedToNextRound() {
         gameState.largest_current_bet = 0;
         ActivateGame();
         BroadcastGameState();
+        BroadcastYourTurn();
     } else if (gameState.board.length === 4) {
         BurnOneCard();
         ProvideBoardCards(1);
@@ -555,6 +561,7 @@ function ProceedToNextRound() {
         gameState.largest_current_bet = 0;
         ActivateGame();
         BroadcastGameState();
+        BroadcastYourTurn();
     } else if (gameState.board.length === 5) {
         gameState.end_of_hand = true;
         BroadcastGameState();
@@ -713,8 +720,6 @@ function BroadcastGameState() {
         }
     });
 
-    let client_to_send_your_turn = undefined;
-
     //share private game view to players
     Clients.forEach(function (client) {
         if (client.status === 'player') {
@@ -735,9 +740,6 @@ function BroadcastGameState() {
                         hole_cards: player.hole_cards,
                         api_key: player.api_key
                     });
-                    if (gameState.in_action === player.id && gameState.in_action !== -1) {
-                        client_to_send_your_turn = client;
-                    }
                 } else {
                     gameState.players.push({
                         uuid: player.uuid,
@@ -757,21 +759,6 @@ function BroadcastGameState() {
             });
             client.connection.sendUTF(message);
 
-            if (client_to_send_your_turn) {
-                let message2 = JSON.stringify({
-                    'action': 'your_turn'
-                });
-                client_to_send_your_turn.connection.sendUTF(message2);
-
-                clearTimeout(ACTION_TIMEOUT_FUNCTION);
-                ACTION_TIMEOUT_FUNCTION = setTimeout(function () {
-
-                    writeToChat("No response from this player, so folding! Suckers!");
-                    GetCurrentPlayerInAction().last_action = 'fold';
-                    NextPersonOrEnd();
-
-                }, TIME_TO_WAIT_FOR_RESPONSE);
-            }
         }
     });
 
@@ -779,6 +766,51 @@ function BroadcastGameState() {
     gameState.players = [];
 
     //TODO: for every broadcast, save the game state in a file.
+}
+
+function BroadcastYourTurn() {
+    let client_to_send_your_turn = undefined;
+
+    //share private game view to players
+    Clients.forEach(function (client) {
+        if (client.status === 'player') {
+
+            Players.forEach(function (player) {
+                if (client.uuid === player.uuid) {
+                    if (gameState.in_action === player.id && gameState.in_action !== -1) {
+                        client_to_send_your_turn = client;
+
+                        console.log("Sending Your Turn to: ", player.name);
+                    }
+                }
+            });
+        }
+    });
+
+    if (client_to_send_your_turn) {
+        let message = JSON.stringify({
+            'action': 'your_turn'
+        });
+        client_to_send_your_turn.connection.sendUTF(message);
+
+        clearTimeout(ACTION_TIMEOUT_FUNCTION);
+        ACTION_TIMEOUT_FUNCTION = setTimeout(function () {
+
+            writeToChat("No response from this player, so folding! Suckers!");
+            GetCurrentPlayerInAction().last_action = 'fold';
+            NextPersonOrEnd();
+
+        }, TIME_TO_WAIT_FOR_RESPONSE);
+    } else {
+        clearTimeout(ACTION_TIMEOUT_FUNCTION);
+        ACTION_TIMEOUT_FUNCTION = setTimeout(function () {
+
+            writeToChat("No response from this player, so folding! Suckers!");
+            GetCurrentPlayerInAction().last_action = 'fold';
+            NextPersonOrEnd();
+
+        }, TIME_TO_WAIT_FOR_RESPONSE);
+    }
 }
 
 function BroadcastScoreBoard() {
@@ -958,21 +990,24 @@ function GetBigBlind() {
 }
 
 function NextPersonOrEnd() {
-    setTimeout(function () {
-        if (!DoesEveryoneHasEqualBets()) {
-            MoveInActionToNextPlayer();
+    if (!DoesEveryoneHasEqualBets()) {
+        MoveInActionToNextPlayer();
+        setTimeout(function () {
             BroadcastGameState();
+            BroadcastYourTurn();
+        }, SLOW_DOWN);
 
-            //TODO: log waiting for player name (which is the next player)
-            //TODO: what about player without money?
-        } else {
-            EndOfBettingRound();
+        //TODO: log waiting for player name (which is the next player)
+        //TODO: what about player without money?
+    } else {
+        EndOfBettingRound();
+        setTimeout(function () {
             BroadcastGameState();
             if (AUTO_ROUND) {
                 ProceedToNextRound();
             }
-        }
-    }, SLOW_DOWN);
+        }, SLOW_DOWN);
+    }
 }
 
 function DoesEveryoneHasEqualBets() {
@@ -1099,7 +1134,7 @@ function ClearPlayerSpecificGameState() {
 
 function ClearSharedGameState() {
     gameState.board = [];
-    gameState.minimum_raise = 0;
+    //gameState.minimum_raise = 0;
     gameState.largest_current_bet = 0;
     gameState.in_action = -1;
     gameState.pots = [{

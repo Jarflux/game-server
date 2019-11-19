@@ -4,8 +4,8 @@
       :class="['server', (!connection.connected && !connection.joined) ? 'server--disconnected' : '', (connection.connected && !connection.joined) ? 'server--connected' : '', (connection.connected && connection.joined) ? 'server--ready' : '']">
       <i class="fa fa-circle"></i>
 
-      <button v-on:click="join" v-if="!connection.joined">Join</button>
-      <button v-on:click="unjoin" v-if="connection.joined">Unjoin</button>
+      <button v-on:click="join" v-if="!connection.joined && connection.connected">Join</button>
+      <button v-on:click="unjoin" v-if="connection.joined && connection.connected">Unjoin</button>
     </div>
 
     <div class="configurator" v-if="gamestate.game_id !== 'start' && connection.connected">
@@ -14,6 +14,9 @@
       <br /><br />
       <button v-on:click="enableAutoHand" v-if="!adminConfig.autoRound">Enable auto play hand</button>
       <button v-on:click="disableAutoHand" v-if="adminConfig.autoRound">Disable auto play hand</button>
+
+      <br /><br />
+      <div v-if="gamestate.game_started" class="minimal-bet" >Minimal bet: {{ gamestate.minimum_raise }}</div>
     </div>
 
     <div v-if="gamestate.game_id !== 'start' && connection.connected">
@@ -21,7 +24,6 @@
       <h2>Game ID: {{ gamestate.game_id }}</h2>
 
       <div v-if="gamestate.game_started" class="larget-bet" >Largest bet: {{ gamestate.largest_current_bet }}</div>
-      <div v-if="gamestate.game_started" class="minimal-bet" >Minimal bet: {{ gamestate.minimum_raise }}</div>
 
       <div class="table container">
         <div v-if="gamestate.players.length <= 1">
