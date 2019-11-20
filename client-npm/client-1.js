@@ -31,7 +31,7 @@ client1.on('connect', function(connection) {
 
     connection.on('message', function(data) {
         if (data.type === 'utf8') {
-            console.log("Received: '" + data.utf8Data + "'");
+            //console.log("Received: '" + data.utf8Data + "'");
 
             var message = JSON.parse(data.utf8Data);
             switch (message.action) {
@@ -49,7 +49,7 @@ client1.on('connect', function(connection) {
                     break;
 
                 case 'your_turn':
-                    console.log("My turn");
+                    console.log("My turn", message);
 
                     let random = Math.round(Math.random() * 100);
 
@@ -77,7 +77,7 @@ client1.on('connect', function(connection) {
 
                 case 'game_state':
                     gameState = message.data;
-                    console.log("Game state", gameState);
+                    //console.log("Game state", gameState);
                     break;
             }
         }

@@ -17,7 +17,6 @@ let gameState = require('./initial-game-state.json');
 let scoreBoard = [];
 
 //TODO-validate if bet is matching with the minimal bet
-//TODO-share in 'your-turn', what is lowest & higest bet is for that player
 //TODO-if player bets 200 and only has 50 chips, bet for 50 chips
 //TODO-split new pot if someone did an allIn
 //TODO-if next player has 0 chips, skip player (don't fold)
@@ -862,7 +861,7 @@ function BroadcastGameState() {
 function BroadcastYourTurn() {
     let client_to_send_your_turn = undefined;
     let attempt = 0;
-    let playerId = '';
+    let player_to_send_your_turn = '';
 
     //share private game view to players
     Clients.forEach(function (client) {
@@ -873,7 +872,7 @@ function BroadcastYourTurn() {
                     if (gameState.in_action === player.id && gameState.in_action !== -1) {
                         client_to_send_your_turn = client;
                         attempt = player.attempt;
-                        playerId = player.id;
+                        player_to_send_your_turn = player;
                         console.log("Sending Your Turn to: ", player.name);
                     }
                 }
@@ -884,7 +883,9 @@ function BroadcastYourTurn() {
     if (client_to_send_your_turn) {
         let message = JSON.stringify({
             'action': 'your_turn',
-            'attempt': attempt
+            'attempt': attempt,
+            'minimum': gameState.minimum_raise,
+            'maximum': player_to_send_your_turn.stack
         });
         client_to_send_your_turn.connection.sendUTF(message);
 
@@ -892,25 +893,20 @@ function BroadcastYourTurn() {
         ACTION_TIMEOUT_FUNCTION = setTimeout(function () {
 
             writeToChat("No response from this player, so folding! Suckers!");
-            GetCurrentPlayerInAction().last_action = 'fold';
+            player_to_send_your_turn.last_action = 'fold';
             gameState.pots[0].eligle_players = gameState.pots[0].eligle_players.filter(function (index) {
-                return index !== playerId;
+                return index !== player_to_send_your_turn.id;
             });
             NextPersonOrEnd();
 
         }, TIME_TO_WAIT_FOR_RESPONSE);
     } else {
-        clearTimeout(ACTION_TIMEOUT_FUNCTION);
-        ACTION_TIMEOUT_FUNCTION = setTimeout(function () {
-
-            writeToChat("No response from this player (disconnected), so folding! Suckers!");
-            GetCurrentPlayerInAction().last_action = 'fold';
-            gameState.pots[0].eligle_players = gameState.pots[0].eligle_players.filter(function (index) {
-                return index !== playerId;
-            });
-            NextPersonOrEnd();
-
-        }, TIME_TO_WAIT_FOR_RESPONSE);
+        writeToChat("Player is disconnected, so folding! Suckers!");
+        player_to_send_your_turn.last_action = 'fold';
+        gameState.pots[0].eligle_players = gameState.pots[0].eligle_players.filter(function (index) {
+            return index !== player_to_send_your_turn.id;
+        });
+        NextPersonOrEnd();
     }
 }
 
