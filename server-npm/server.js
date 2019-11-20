@@ -16,7 +16,12 @@ let gameState = require('./initial-game-state.json');
 
 let scoreBoard = [];
 
-//TODO: set status of player to 'out' if all money is gone
+//TODO-raise small blind & big blind every 10 hands
+//TODO-validate if bet is matching with the minimal bet
+//TODO-share in 'your-turn', what is lowest & higest bet is for that player
+//TODO-if player bets 200 and only has 50 chips, bet for 50 chips
+//TODO-split new pot if someone did an allIn
+//TODO-if next player has 0 chips, skip player (don't fold)
 
 var server = http.createServer(function (request, response) {
     console.log((new Date()) + ' Received request for ' + request.url);
@@ -290,7 +295,7 @@ wsServer.on('request', function (request) {
 
                         if (player.attempt <= 3 && player.isValidBet(gameState.largest_current_bet)) {
                             if (gameState.largest_current_bet === 0 || gameState.largest_current_bet === player.bet) {
-                                writeToChat(player.name + " checks " + ' in attempt ' + player.attempt);
+                                writeToChat(player.name + " checks " + 'in attempt ' + player.attempt);
                                 player.setBet(gameState.largest_current_bet);
                                 player.last_action = 'check';
                             } else {
@@ -544,13 +549,14 @@ function StartNewHand() {
     console.log("Cards", Cards);
 
     //enable all players that are waiting?
-    Players.forEach(function (playerToActivate) {
-        if (playerToActivate.status === 'waiting') {
-            playerToActivate.status = 'active';
+    Players.forEach(function (player) {
+        if (player.status === 'waiting') {
+            player.status = 'active';
         }
+        player.last_action = '';
+        player.hole_cards = [];
     });
 
-    EraseHoleCardsForAllPlayers();
     gameState.board = [];
 
     MoveDealerToNextPlayer();
@@ -649,9 +655,11 @@ Player.prototype = {
         this.hole_cards.push(hand);
     },
     setBet: function (bet) {
+        let allIn = false;
         let chipsToAddTobet = bet - this.bet;
-        if (chipsToAddTobet > this.stack){
+        if (chipsToAddTobet > this.stack) {
             chipsToAddTobet = this.stack;
+            allIn = true;
         }
 
         if (this.stack >= chipsToAddTobet && bet > 0) {
@@ -663,7 +671,9 @@ Player.prototype = {
         if (gameState.pots[0].eligle_players.indexOf(this.id) === -1) {
             gameState.pots[0].eligle_players.push(this.id);
         }
-        gameState.largest_current_bet = bet;
+        if (!allIn) {
+            gameState.largest_current_bet = bet;
+        }
         this.attempt = 1;
     },
     isValidBet: function (bet) {
@@ -688,6 +698,9 @@ Player.prototype = {
     },
     stillInTheRunning: function () {
         return this.status === 'active' && this.last_action !== 'fold';
+    },
+    stillHasCredits: function () {
+        return this.stack > 0;
     },
 };
 
@@ -735,6 +748,7 @@ function MoveDealerToNextPlayer() {
 
 function ActivateGame() {
     if (gameState.board.length === 0) {
+        //let dealer = GetDealer();
         let smallBlind = GetSmallBlind();
         smallBlind.setBet(gameState.small_blind);
         smallBlind.last_action = "small_blind";
@@ -745,14 +759,14 @@ function ActivateGame() {
         bigBlind.last_action = "big_blind";
         writeToChat(bigBlind.name + " posted big blind of " + gameState.big_blind);
 
-        let firstPlayerToBet = GetNextPlayer(bigBlind);
+        let firstPlayerToBet = GetNextActivePlayer(bigBlind, "first player");
         gameState.in_action = firstPlayerToBet.id;
         console.log("First player is", firstPlayerToBet.name)
 
-        gameState.largest_current_bet = firstPlayerToBet.bet;
+        //gameState.largest_current_bet = firstPlayerToBet.bet;
     } else {
         let dealer = GetDealer();
-        let firstPlayerToBet = GetNextActivePlayer(dealer);
+        let firstPlayerToBet = GetNextActivePlayer(dealer, "for dealer"); //TODO; only one left
         gameState.in_action = firstPlayerToBet.id;
         console.log("First player is", firstPlayerToBet.name)
     }
@@ -835,12 +849,13 @@ function BroadcastGameState() {
     //reset player list
     gameState.players = [];
 
-    //TODO: for every broadcast, save the game state in a file.
+    //TODO-for every broadcast, save the game state in a file. filename = game id
 }
 
 function BroadcastYourTurn() {
     let client_to_send_your_turn = undefined;
     let attempt = 0;
+    let playerId = '';
 
     //share private game view to players
     Clients.forEach(function (client) {
@@ -851,6 +866,7 @@ function BroadcastYourTurn() {
                     if (gameState.in_action === player.id && gameState.in_action !== -1) {
                         client_to_send_your_turn = client;
                         attempt = player.attempt;
+                        playerId = player.id;
                         console.log("Sending Your Turn to: ", player.name);
                     }
                 }
@@ -870,6 +886,9 @@ function BroadcastYourTurn() {
 
             writeToChat("No response from this player, so folding! Suckers!");
             GetCurrentPlayerInAction().last_action = 'fold';
+            gameState.pots[0].eligle_players = gameState.pots[0].eligle_players.filter(function (index) {
+                return index !== playerId;
+            });
             NextPersonOrEnd();
 
         }, TIME_TO_WAIT_FOR_RESPONSE);
@@ -877,8 +896,11 @@ function BroadcastYourTurn() {
         clearTimeout(ACTION_TIMEOUT_FUNCTION);
         ACTION_TIMEOUT_FUNCTION = setTimeout(function () {
 
-            writeToChat("No response from this player, so folding! Suckers!");
+            writeToChat("No response from this player (disconnected), so folding! Suckers!");
             GetCurrentPlayerInAction().last_action = 'fold';
+            gameState.pots[0].eligle_players = gameState.pots[0].eligle_players.filter(function (index) {
+                return index !== playerId;
+            });
             NextPersonOrEnd();
 
         }, TIME_TO_WAIT_FOR_RESPONSE);
@@ -947,14 +969,20 @@ function OnlyOnePlayerLeft() {
     return playersLeft.length === 1;
 }
 
+function OnlyOnePlayerLeftWithCredits() {
+    let playersLeftWithCredits = Players.filter(function (player) {
+        return player.stillHasCredits();
+    });
+
+    return playersLeftWithCredits.length === 1;
+}
+
 function EndOfBettingRound() {
     gameState.in_action = -1;
 
     console.log("End of betting round");
 
-    //TODO: reset bets
-
-    //TODO: Ben end of betting round
+    //RemovePlayersWithoutChips();
 }
 
 function RemovePlayer(playerToRemove) {
@@ -1003,7 +1031,7 @@ function GetCurrentPlayerInAction() {
 }
 
 function MoveInActionToNextPlayer() {
-    let nextPlayer = GetNextActivePlayer(GetCurrentPlayerInAction());
+    let nextPlayer = GetNextActivePlayer(GetCurrentPlayerInAction(), "Mover");
     gameState.in_action = nextPlayer.id;
 }
 
@@ -1032,12 +1060,13 @@ function GetNextPlayer(player) {
     return nextPlayer;
 }
 
-function GetNextActivePlayer(player) {
+function GetNextActivePlayer(player, from) {
+    console.log("from", from);
     let nextPlayer = GetNextPlayer(player);
-    if (nextPlayer.status === 'active' && nextPlayer.last_action !== 'fold') {
+    if (nextPlayer.stillInTheRunning()) {
         return nextPlayer;
     }
-    return GetNextActivePlayer(nextPlayer);
+    return GetNextActivePlayer(nextPlayer, from);
 }
 
 function GetDealer() {
@@ -1053,12 +1082,12 @@ function GetDealer() {
 
 function GetSmallBlind() {
     let dealer = GetDealer();
-    return GetNextPlayer(dealer);
+    return GetNextActivePlayer(dealer);
 }
 
 function GetBigBlind() {
     let smallBlind = GetSmallBlind();
-    return GetNextPlayer(smallBlind);
+    return GetNextActivePlayer(smallBlind);
 }
 
 function NextPersonOrEnd() {
@@ -1068,9 +1097,6 @@ function NextPersonOrEnd() {
             BroadcastGameState();
             BroadcastYourTurn();
         }, SLOW_DOWN);
-
-        //TODO: log waiting for player name (which is the next player)
-        //TODO: what about player without money?
     } else {
         EndOfBettingRound();
         setTimeout(function () {
@@ -1122,6 +1148,7 @@ function CalculateRanking() {
                 let cards = player.hole_cards.join(' ') + ' ' + flop;
                 const rank = rankBoard(cards);
                 const description = rankDescription[rank];
+                //TODO-hand ranking more specific
 
                 writeToChat(player.name + " has " + description + "(" + rank + ") [" + cards + "]");
 
@@ -1166,8 +1193,15 @@ function EndHand() {
 
     RemovePlayersWithoutChips();
 
-    if (AUTO_GAME) {
-        StartNewHand();
+    if (OnlyOnePlayerLeftWithCredits()) {
+        console.log("We have a winner!!!!");
+        //gameState. = false;
+        BroadcastGameState();
+    } else {
+        if (AUTO_GAME) {
+            //TODO Michaël only go to new hand if still players to play with
+            StartNewHand(); //TODO: only of still enough players, otherwise end_game
+        }
     }
 }
 
@@ -1265,9 +1299,9 @@ function RemovePlayersWithoutChips() {  // Bust all players without chips
         }
     });
 
-    Players.filter(function (player) {
+    /*Players.filter(function (player) {
         return player.stack !== 0;
-    });
+    });*/
 }
 
 

@@ -16,6 +16,8 @@
       <button v-on:click="disableAutoHand" v-if="adminConfig.autoRound">Disable auto play hand</button>
 
       <br /><br />
+      <div v-if="gamestate.game_started" class="small-blind" >Small blind: {{ gamestate.small_blind }}</div>
+      <div v-if="gamestate.game_started" class="big-blind" >Big blind: {{ gamestate.big_blind }}</div>
       <div v-if="gamestate.game_started" class="minimal-bet" >Minimal bet: {{ gamestate.minimum_raise }}</div>
     </div>
 
@@ -323,6 +325,10 @@
 
         &--inactive {
           color: red;
+        }
+
+        &--busted {
+          color: saddlebrown;
         }
 
         &--waiting {
