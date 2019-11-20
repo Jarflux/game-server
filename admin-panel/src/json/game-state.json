@@ -6,11 +6,11 @@
   "pots": [
     {
       "size": 500,
-      "eligle_players": [ 0, 1, 2, 3 ]
+      "eligible_players": [ 0, 1, 2, 3 ]
     },
     {
       "size": 200,
-      "eligle_players": [ 0, 1, 2 ]
+      "eligible_players": [ 0, 1, 2 ]
     }
   ],
   "minimum_raise": 500,
@@ -81,5 +81,6 @@
       "hole_cards": []
     }
   ],
-  "board": ["Ad","Qd","9h","9d","Jc"]
+  "board": ["Ad","Qd","9h","9d","Jc"],
+  "chat": []
 }

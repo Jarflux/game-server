@@ -29,7 +29,7 @@ Every player will only see his own hole_cards and api_key.
 	"largest_current_bet": 300,
 	"pots": [{
 		"size": 450,
-		"eligle_players": [1, 2]
+		"eligible_players": [1, 2]
 	}],
 	"minimum_raise": 500,
 	"dealer": 1,

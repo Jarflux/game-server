@@ -11,7 +11,7 @@
     <div class="configurator" v-if="gamestate.game_id !== 'start' && connection.connected">
       <button v-on:click="enableAutoGame" v-if="!adminConfig.autoGame">Enable auto play game</button>
       <button v-on:click="disableAutoGame" v-if="adminConfig.autoGame">Disable auto play game</button>
-      <br /><br />
+      <br/><br/>
       <button v-on:click="enableAutoHand" v-if="!adminConfig.autoRound">Enable auto play hand</button>
       <button v-on:click="disableAutoHand" v-if="adminConfig.autoRound">Disable auto play hand</button>
 
@@ -19,13 +19,30 @@
       <div v-if="gamestate.game_started" class="small-blind" >Small blind: {{ gamestate.small_blind }}</div>
       <div v-if="gamestate.game_started" class="big-blind" >Big blind: {{ gamestate.big_blind }}</div>
       <div v-if="gamestate.game_started" class="minimal-bet" >Minimal bet: {{ gamestate.minimum_raise }}</div>
+
+      <button v-on:click="startGame" v-if="connection.joined && !gamestate.game_started && gamestate.players.length > 1">
+        Start game
+      </button>
+      <button v-on:click="startHand"
+              v-if="connection.joined && gamestate.game_started && !gamestate.hand_started && gamestate.players.length > 1">
+        Start hand
+      </button>
+      <button v-on:click="nextBettingRound"
+              v-if="connection.joined && gamestate.dealer !== -1 && gamestate.in_action === -1 && !gamestate.end_of_hand">
+        Next betting round
+      </button>
+      <button v-on:click="closeHand"
+              v-if="connection.joined && gamestate.dealer !== -1 && gamestate.in_action === -1 && gamestate.end_of_hand && gamestate.ranking.length === 0">
+        Get ranking & assign pot
+      </button>
+
     </div>
 
     <div v-if="gamestate.game_id !== 'start' && connection.connected">
 
       <h2>Game ID: {{ gamestate.game_id }}</h2>
 
-      <div v-if="gamestate.game_started" class="larget-bet" >Largest bet: {{ gamestate.largest_current_bet }}</div>
+      <div v-if="gamestate.game_started" class="larget-bet">Largest bet: {{ gamestate.largest_current_bet }}</div>
 
       <div class="table container">
         <div v-if="gamestate.players.length <= 1">
@@ -51,7 +68,9 @@
           </div>
         </div>
 
-        <div v-if="gamestate.game_started" class="pot" v-for="pot in gamestate.pots">Pot: {{ pot.size }}, Players: {{ pot.eligle_players }}</div>
+        <div v-if="gamestate.game_started" class="pot" v-for="pot in gamestate.pots">Pot: {{ pot.size }}, Players: {{
+          pot.eligible_players }}
+        </div>
 
         <div class="board row">
           <div class="playing-card" v-for="card in gamestate.board">
@@ -60,55 +79,49 @@
         </div>
       </div>
 
-      <hr/>
-
     </div>
-
-    <button v-on:click="startGame" v-if="connection.joined && !gamestate.game_started && gamestate.players.length > 1">
-      Start game
-    </button>
-    <button v-on:click="startHand"
-            v-if="connection.joined && gamestate.game_started && !gamestate.hand_started && gamestate.players.length > 1">
-      Start hand
-    </button>
-    <button v-on:click="nextBettingRound"
-            v-if="connection.joined && gamestate.dealer !== -1 && gamestate.in_action === -1 && !gamestate.end_of_hand">
-      Next betting round
-    </button>
-    <button v-on:click="closeHand"
-            v-if="connection.joined && gamestate.dealer !== -1 && gamestate.in_action === -1 && gamestate.end_of_hand && gamestate.ranking.length === 0">
-      Get ranking & assign pot
-    </button>
 
     <hr/>
 
-    <div class="ranking" v-if="gamestate.ranking.length > 0">
-      <h3>Ranking</h3>
-      <ol class="ranking-list">
-        <li v-for="rank in gamestate.ranking">
-          <strong>{{ rank.name }}</strong><br />
-          &nbsp;&nbsp;Cards: {{ rank.cards }}<br />
-          &nbsp;&nbsp;Description: {{ rank.description }}<br />
-          &nbsp;&nbsp;Rank: ({{ rank.rank }})
-        </li>
-      </ol>
+    <div class="container">
+      <div class="row">
 
-      <hr/>
-    </div>
-
-    <div>
-      <h3>Score Board</h3>
-      <div v-if="scoreBoard.list.length == 0">No scores yet ...</div>
-
-      <div class="score-board-list">
-        <div v-for="score in scoreBoard.list">
-          <ol class="ranking-list">
-            <li v-for="rank in score">{{ rank.name }} - {{ rank.cards }} - {{ rank.description }} ({{ rank.rank }})</li>
-          </ol>
+        <div class="chat" v-if="gamestate.chat.length > 0">
+          <h3>Chat</h3>
+          <div class="chatline" v-for="msg in gamestate.chat.slice(0, 15)">{{ msg.timestamp | formatDate}}: {{ msg.msg }}</div>
         </div>
-      </div>
 
+        <div class="ranking" v-if="gamestate.ranking.length > 0">
+          <h3>Ranking</h3>
+          <ol class="ranking-list">
+            <li v-for="rank in gamestate.ranking">
+              <strong>{{ rank.name }}</strong><br/>
+              &nbsp;&nbsp;Cards: {{ rank.cards }}<br/>
+              &nbsp;&nbsp;Description: {{ rank.description }}<br/>
+              &nbsp;&nbsp;Rank: ({{ rank.rank }})
+            </li>
+          </ol>
+
+          <hr/>
+        </div>
+
+        <div>
+          <h3>Score Board</h3>
+          <div v-if="scoreBoard.list.length == 0">No scores yet ...</div>
+
+          <div class="score-board-list">
+            <div v-for="score in scoreBoard.list">
+              <ol class="ranking-list">
+                <li v-for="rank in score">{{ rank.name }} - {{ rank.cards }} - {{ rank.description }} ({{ rank.rank }})</li>
+              </ol>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
     </div>
+
   </div>
 </template>
 
@@ -116,6 +129,7 @@
   import Vue from 'vue';
   import VuePlayingCard from 'vue-playing-card';
   import VueNativeSock from 'vue-native-websocket'
+  import moment from 'moment'
 
   const API_KEY = 'R3a8FibuDreX"%G)kvn17>/}8;,#E1OoAAU{Dx?l(###XAm=4QL2lLTUlmj-{}A';
 
@@ -130,14 +144,15 @@
   };
 
   gamestate.ranking = [];
+  gamestate.chat = [];
 
   let scoreBoard = {
-      list: []
+    list: []
   };
 
   let adminConfig = {
-      autoRound: false,
-      autoGame: false
+    autoRound: false,
+    autoGame: false
   }
 
   Vue.use(VueNativeSock, 'ws://localhost:8081', {
@@ -150,6 +165,12 @@
   });
 
   Vue.use(VuePlayingCard);
+
+  Vue.filter('formatDate', function(value) {
+    if (value) {
+      return moment(value).format('MM/DD/YYYY hh:mm')
+    }
+  });
 
   export default {
     name: 'app',
@@ -187,20 +208,20 @@
         this.$socket.sendObj(data);
       },
       enableAutoGame: function (val) {
-          const data = {action: 'config_auto_game', data: true, api_key: API_KEY};
-          this.$socket.sendObj(data);
+        const data = {action: 'config_auto_game', data: true, api_key: API_KEY};
+        this.$socket.sendObj(data);
       },
       disableAutoGame: function (val) {
-          const data = {action: 'config_auto_game', data: false, api_key: API_KEY};
-          this.$socket.sendObj(data);
+        const data = {action: 'config_auto_game', data: false, api_key: API_KEY};
+        this.$socket.sendObj(data);
       },
       enableAutoHand: function (val) {
-          const data = {action: 'config_auto_round', data: true, api_key: API_KEY};
-          this.$socket.sendObj(data);
+        const data = {action: 'config_auto_round', data: true, api_key: API_KEY};
+        this.$socket.sendObj(data);
       },
       disableAutoHand: function (val) {
-          const data = {action: 'config_auto_round', data: false, api_key: API_KEY};
-          this.$socket.sendObj(data);
+        const data = {action: 'config_auto_round', data: false, api_key: API_KEY};
+        this.$socket.sendObj(data);
       }
     },
     created() {
@@ -223,10 +244,10 @@
             gamestate.minimum_raise = newGameState.minimum_raise;
             gamestate.board = newGameState.board;
             gamestate.ranking = newGameState.ranking;
+            gamestate.chat = newGameState.chat.reverse();
             gamestate.end_of_hand = newGameState.end_of_hand;
             gamestate.game_started = newGameState.game_started;
             gamestate.hand_started = newGameState.hand_started;
-
             break;
           case "connected":
             console.log("Connected");
@@ -373,6 +394,11 @@
     }
   }
 
+  .chat{
+    .chatline{
+      text-align:left;
+    }
+  }
   .ranking {
     margin-top: 30px;
   }

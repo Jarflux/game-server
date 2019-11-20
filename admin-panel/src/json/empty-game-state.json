@@ -5,7 +5,7 @@
   "largest_current_bet": 300,
   "pots": [{
     "size": 0,
-    "eligle_players": []
+    "eligible_players": []
   }],
   "minimum_raise": 50,
   "dealer": -1,
@@ -13,5 +13,6 @@
   "players": [
   ],
   "board": [],
-  "ranking": []
+  "ranking": [],
+  "chat": []
 }

@@ -316,7 +316,7 @@ wsServer.on('request', function (request) {
                             writeToChat(player.name + " has a fold due to exceeded wrong attempts.");
                             player.last_action = 'fold';
                             player.attempt = 1;
-                            gameState.pots[0].eligle_players = gameState.pots[0].eligle_players.filter(function (index) {
+                            gameState.pots[0].eligible_players = gameState.pots[0].eligible_players.filter(function (index) {
                                 return index !== player.id;
                             });
                             NextPersonOrEnd();
@@ -356,7 +356,7 @@ wsServer.on('request', function (request) {
                                 writeToChat(player.name + " has a fold due to exceeded wrong attempts.");
                                 player.last_action = 'fold';
                                 player.attempt = 1;
-                                gameState.pots[0].eligle_players = gameState.pots[0].eligle_players.filter(function (index) {
+                                gameState.pots[0].eligible_players = gameState.pots[0].eligible_players.filter(function (index) {
                                     return index !== player.id;
                                 });
                                 NextPersonOrEnd();
@@ -365,7 +365,7 @@ wsServer.on('request', function (request) {
                             if (player.attempt <= 3 && player.isValidBet(message.data)) {
                                 player.setBet(message.data);
                                 player.last_action = 'raise';
-                                gameState.pots[0].eligle_players = [player.id];
+                                gameState.pots[0].eligible_players = [player.id];
 
                                 writeToChat(player.name + " raises " + message.data + ' in attempt ' + player.attempt);
 
@@ -383,7 +383,7 @@ wsServer.on('request', function (request) {
                                 writeToChat(player.name + " has a fold due to exceeded wrong attempts.");
                                 player.last_action = 'fold';
                                 player.attempt = 1;
-                                gameState.pots[0].eligle_players = gameState.pots[0].eligle_players.filter(function (index) {
+                                gameState.pots[0].eligible_players = gameState.pots[0].eligible_players.filter(function (index) {
                                     return index !== player.id;
                                 });
                                 NextPersonOrEnd();
@@ -408,7 +408,7 @@ wsServer.on('request', function (request) {
                         player.last_action = 'fold';
                         player.attempt = 1;
 
-                        gameState.pots[0].eligle_players = gameState.pots[0].eligle_players.filter(function (index) {
+                        gameState.pots[0].eligible_players = gameState.pots[0].eligible_players.filter(function (index) {
                             return index !== player.id;
                         });
 
@@ -674,8 +674,8 @@ Player.prototype = {
         }
 
         gameState.pots[0].size = gameState.pots[0].size + chipsToAddTobet;
-        if (gameState.pots[0].eligle_players.indexOf(this.id) === -1) {
-            gameState.pots[0].eligle_players.push(this.id);
+        if (gameState.pots[0].eligible_players.indexOf(this.id) === -1) {
+            gameState.pots[0].eligible_players.push(this.id);
         }
         if (!allIn) {
             gameState.largest_current_bet = bet;
@@ -894,7 +894,7 @@ function BroadcastYourTurn() {
 
             writeToChat("No response from this player, so folding! Suckers!");
             player_to_send_your_turn.last_action = 'fold';
-            gameState.pots[0].eligle_players = gameState.pots[0].eligle_players.filter(function (index) {
+            gameState.pots[0].eligible_players = gameState.pots[0].eligible_players.filter(function (index) {
                 return index !== player_to_send_your_turn.id;
             });
             NextPersonOrEnd();
@@ -903,7 +903,7 @@ function BroadcastYourTurn() {
     } else {
         writeToChat("Player is disconnected, so folding! Suckers!");
         player_to_send_your_turn.last_action = 'fold';
-        gameState.pots[0].eligle_players = gameState.pots[0].eligle_players.filter(function (index) {
+        gameState.pots[0].eligible_players = gameState.pots[0].eligible_players.filter(function (index) {
             return index !== player_to_send_your_turn.id;
         });
         NextPersonOrEnd();
@@ -1248,7 +1248,7 @@ function ClearSharedGameState() {
     gameState.in_action = -1;
     gameState.pots = [{
         "size": 0,
-        "eligle_players": []
+        "eligible_players": []
     }];
 }
 

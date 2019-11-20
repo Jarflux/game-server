@@ -5,7 +5,7 @@
   "largest_current_bet": 0,
   "pots": [{
     "size": 0,
-    "eligle_players": []
+    "eligible_players": []
   }],
   "minimum_raise": 20,
   "dealer": -1,
