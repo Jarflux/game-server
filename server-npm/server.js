@@ -6,7 +6,7 @@ const {rankBoard, rankDescription} = require('phe');
 
 const SLOW_DOWN = 1000;
 const TIME_TO_WAIT_FOR_RESPONSE = 10000;
-const STARTING_CHIP_STACK = 500;
+const STARTING_CHIP_STACK = 50;
 const ENABLE_SERVER_LOGS = true;
 
 let AUTO_ROUND = true;
@@ -19,7 +19,8 @@ let scoreBoard = [];
 //TODO-validate if bet is matching with the minimal bet
 //TODO-if player bets 200 and only has 50 chips, bet for 50 chips
 //TODO-split new pot if someone did an allIn
-//TODO-if next player has 0 chips, skip player (don't fold)
+//TODO-if next player has 0 chips, skip player (don't fold)  (Done but not validated)
+//TODO-Fix infinite recursion in GetNextActivePlayer
 
 var server = http.createServer(function (request, response) {
     console.log((new Date()) + ' Received request for ' + request.url);
@@ -1066,7 +1067,7 @@ function GetNextPlayer(player) {
 function GetNextActivePlayer(player, from) {
     console.log("from", from);
     let nextPlayer = GetNextPlayer(player);
-    if (nextPlayer.stillInTheRunning()) {
+    if (nextPlayer.stillInTheRunning() && nextPlayer.stack !== 0) {
         return nextPlayer;
     }
     return GetNextActivePlayer(nextPlayer, from);
