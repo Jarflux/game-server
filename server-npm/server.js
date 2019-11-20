@@ -16,7 +16,6 @@ let gameState = require('./initial-game-state.json');
 
 let scoreBoard = [];
 
-//TODO-raise small blind & big blind every 10 hands
 //TODO-validate if bet is matching with the minimal bet
 //TODO-share in 'your-turn', what is lowest & higest bet is for that player
 //TODO-if player bets 200 and only has 50 chips, bet for 50 chips
@@ -544,7 +543,8 @@ function ProvideBoardCards(count) {
 }
 
 function StartNewHand() {
-    writeToChat("Starting new hand");
+    gameState.hand++;
+    writeToChat("Starting new hand (hand: " + gameState.hand + ")");
     NewDeck();
     console.log("Cards", Cards);
 
@@ -567,6 +567,13 @@ function StartNewHand() {
     writeToChat("Dealing hole cards");
     ProvideOneCardToAllPlayers();
     ProvideOneCardToAllPlayers();
+
+    //increase small & big blind every 10th game
+    if (gameState.hand % 10 === 0) {
+        gameState.small_blind = gameState.small_blind * 2;
+        gameState.big_blind = gameState.big_blind * 2;
+        gameState.minimum_raise = gameState.big_blind;
+    }
 
     gameState.hand_started = true;
 
