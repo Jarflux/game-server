@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 let WebSocketClient = require('websocket').client;
+let shuffle = require('./shuffle');
+
+function randomIntFromInterval(min, max) { // min and max included
+    return Math.floor(Math.random() * (max - min + 1) + min);
+}
 
 let client1 = new WebSocketClient();
 
@@ -51,31 +56,23 @@ client1.on('connect', function(connection) {
                 case 'your_turn':
                     console.log("My turn", message);
 
-                    let random = Math.round(Math.random() * 100);
-                    //random = 14;
+                    message.options = shuffle(message.options);
+                    let option = message.options[0];
+                    if (option.action === 'fold') {
+                        message.options = shuffle(message.options);
+                        option = message.options[0];
+                    }
 
-                    if (random < 10) {
-                        //Return with a call, no matter what the input is
-                        connection.sendUTF(JSON.stringify({ action:'raise', data: 20}));
-                        console.log("Responded with:", "RAISE 20");
-                    } else if (random < 15) {
-                        //Return with a call, no matter what the input is
-                        connection.sendUTF(JSON.stringify({ action:'raise', data: 200}));
-                        console.log("Responded with:", "RAISE 200");
-                    } else if (random > 90) {
-                        //Return with a call, no matter what the input is
-                        connection.sendUTF(JSON.stringify({ action:'fold'}));
-                        console.log("Responded with:", "FOLD");
-                    } else if (random === 80) {
-                        // Do not respond at all
-                    } else {
-                        //Return with a call, no matter what the input is
-                        connection.sendUTF(JSON.stringify({ action:'call'}));
-                        console.log("Responded with:", "CALL");
+                    if (option.action === 'fold' || option.action === 'call' || option.action === 'check') {
+                        connection.sendUTF(JSON.stringify({ action: option.action}));
+                        console.log("Responded with:", option.action);
+                    } else if (option.action === 'raise') {
+                        let raise = randomIntFromInterval(option.minimum, option.maximum);
+                        connection.sendUTF(JSON.stringify({ action: 'raise', data: raise}));
+                        console.log("Responded with:", "RAISE " + raise);
                     }
 
                     break;
-
                 case 'game_state':
                     gameState = message.data;
                     //console.log("Game state", gameState);

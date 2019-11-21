@@ -4,7 +4,7 @@ var http = require('http');
 const crypto = require('crypto');
 const {rankBoard, rankDescription} = require('phe');
 
-const SLOW_DOWN = 500;
+const SLOW_DOWN = 1000;
 const TIME_TO_WAIT_FOR_RESPONSE = 10000;
 const STARTING_CHIP_STACK = 400;
 const ENABLE_SERVER_LOGS = true;
@@ -16,8 +16,6 @@ let gameState = require('./initial-game-state.json');
 
 let scoreBoard = [];
 
-//TODO-validate if bet is matching with the minimal bet
-//TODO-if player bets 200 and only has 50 chips, bet for 50 chips
 //TODO-split new pot if someone did an allIn
 
 var server = http.createServer(function (request, response) {
@@ -297,20 +295,13 @@ wsServer.on('request', function (request) {
                     break;
 
                 case 'check': //{'action': 'check'}
-                case 'call': //{'action': 'call'}
                     if (player.id === gameState.in_action) {
                         clearTimeout(ACTION_TIMEOUT_FUNCTION);
 
-                        if (player.attempt <= 3 && player.isValidBet(gameState.largest_current_bet)) {
-                            if (gameState.largest_current_bet === 0 || gameState.largest_current_bet === player.bet) {
-                                player.setBet(gameState.largest_current_bet);
-                                writeToChat("Attempt " + player.attempt + ": " +  player.name + " checks " + player.bet + ", keeping " + player.stack);
-                                player.last_action = 'check';
-                            } else {
-                                player.setBet(gameState.largest_current_bet);
-                                writeToChat("Attempt " + player.attempt + ": " +  player.name + " calls " + player.bet + ", keeping " + player.stack);
-                                player.last_action = 'call';
-                            }
+                        if (player.attempt <= 3 && player.isValidTurn(gameState.largest_current_bet, 'check')) {
+                            player.setBet(gameState.largest_current_bet);
+                            writeToChat("Attempt " + player.attempt + ": " +  player.name + " checks " + player.bet + ", keeping " + player.stack);
+                            player.last_action = 'check';
 
                             client.connection.sendUTF(JSON.stringify({
                                 'action': 'success',
@@ -319,7 +310,43 @@ wsServer.on('request', function (request) {
                             player.attempt = 1;
                             NextPersonOrEnd();
                         } else if (player.attempt <= 3) {
-                            writeToChat(player.name + " calls/checks " + gameState.largest_current_bet + ', which is not valid. Ask for retry ...');
+                            writeToChat("Attempt " + player.attempt + ": " +player.name + " checks " + ', which is not valid. Ask for retry ...');
+                            player.attempt++;
+                            BroadcastYourTurn(); //try again
+                        } else {
+                            writeToChat(player.name + " has a fold due to exceeded wrong attempts.");
+                            player.last_action = 'fold';
+                            player.attempt = 1;
+                            gameState.pots[0].eligible_players = gameState.pots[0].eligible_players.filter(function (index) {
+                                return index !== player.id;
+                            });
+                            NextPersonOrEnd();
+                        }
+                    } else {
+                        console.error("It's NOT your turn", player.name);
+                        client.connection.sendUTF(JSON.stringify({
+                            'action': 'error',
+                            'data': 'not-your-turn'
+                        }));
+                    }
+                    break;
+                case 'call': //{'action': 'call'}
+                    if (player.id === gameState.in_action) {
+                        clearTimeout(ACTION_TIMEOUT_FUNCTION);
+
+                        if (player.attempt <= 3 && player.isValidTurn(gameState.largest_current_bet, 'call')) {
+                            player.setBet(gameState.largest_current_bet);
+                            writeToChat("Attempt " + player.attempt + ": " +  player.name + " calls " + player.bet + ", keeping " + player.stack);
+                            player.last_action = 'call';
+
+                            client.connection.sendUTF(JSON.stringify({
+                                'action': 'success',
+                                'data': 'action-accepted'
+                            }));
+                            player.attempt = 1;
+                            NextPersonOrEnd();
+                        } else if (player.attempt <= 3) {
+                            writeToChat("Attempt " + player.attempt + ": " + player.name + " calls " + ', which is not valid. Ask for retry ...');
                             player.attempt++;
                             BroadcastYourTurn(); //try again
                         } else {
@@ -346,7 +373,7 @@ wsServer.on('request', function (request) {
                         clearTimeout(ACTION_TIMEOUT_FUNCTION);
 
                         if (gameState.largest_current_bet === message.data) {
-                            if (player.attempt <= 3 && player.isValidBet(message.data)) {
+                            if (player.attempt <= 3 && player.isValidTurn(message.data, message.action)) {
                                 player.setBet(message.data);
                                 player.last_action = 'call';
 
@@ -359,7 +386,7 @@ wsServer.on('request', function (request) {
                                 player.attempt = 1;
                                 NextPersonOrEnd();
                             } else if (player.attempt <= 3) {
-                                writeToChat(player.name + " calls " + gameState.largest_current_bet + ', which is not valid. Ask for retry ...');
+                                writeToChat("Attempt " + player.attempt + ": " + player.name + " calls " + gameState.largest_current_bet + ', which is not valid. Ask for retry ...');
                                 player.attempt++;
                                 BroadcastYourTurn(); //try again
                             } else {
@@ -372,7 +399,7 @@ wsServer.on('request', function (request) {
                                 NextPersonOrEnd();
                             }
                         } else {
-                            if (player.attempt <= 3 && player.isValidBet(message.data)) {
+                            if (player.attempt <= 3 && player.isValidTurn(message.data, message.action)) {
                                 player.setBet(message.data);
                                 player.last_action = 'raise';
                                 gameState.pots[0].eligible_players = [player.id];
@@ -386,7 +413,7 @@ wsServer.on('request', function (request) {
                                 player.attempt = 1;
                                 NextPersonOrEnd();
                             } else if (player.attempt <= 3) {
-                                writeToChat(player.name + " raises " + message.data + ', which is not valid. Ask for retry ...');
+                                writeToChat("Attempt " + player.attempt + ": " + player.name + " raises " + message.data + ', which is not valid. Ask for retry ...');
                                 player.attempt++;
                                 BroadcastYourTurn(); //try again
                             } else {
@@ -670,7 +697,7 @@ Player.prototype = {
     addHoleCards: function (hand) {
         this.hole_cards.push(hand);
     },
-    setBet: function (bet) {
+    setBet: function (bet) { //TODO-if player bets 200 and only has 50 chips, bet for 50 chips
         let allIn = false;
         let chipsToAddTobet = bet - this.bet;
         if (chipsToAddTobet > this.stack) {
@@ -692,37 +719,43 @@ Player.prototype = {
         }
         this.attempt = 1;
     },
-    isValidBet: function (bet) {
+    isValidTurn: function (bet, action) {
         if (typeof bet === 'undefined') {
             return false;
         }
-        if (this.stack === 0) {
-            return false;
-        }
 
-        if (gameState.board.length > 0 && bet === 0) {
-            return true;
-        }
+        let options = GetPossibleOptionsForYourTurn(this);
+        let validTurn = false;
 
-        let chipsToAddTobet = bet - this.bet;
+        options.forEach(function(option) {
+            if (option.action === action) {
+                switch (option.action) {
+                    case 'fold':
+                        validTurn = true;
+                        break;
+                    case 'check':
+                        validTurn = true;
+                        break;
+                    case 'call':
+                        validTurn = true;
+                        break;
+                    case 'raise':
+                        if (bet >= option.minimum && bet <= option.maximum) {
+                            validTurn = true;
+                        }
+                        break;
+                }
+            }
+        });
+
+        console.log(action, options, validTurn);
+
+        /*let chipsToAddTobet = bet - this.bet;
         if (chipsToAddTobet > this.stack) {
             chipsToAddTobet = this.stack;
-        }
+        }*/
 
-        if (bet >= gameState.minimum_raise) {
-            return true;
-        } else if (bet < gameState.minimum_raise && chipsToAddTobet === this.stack) {
-            return true;
-        } else {
-            return false;
-        }
-
-        //console.log("Valid bet?", chipsToAddTobet, this.stack, bet, this.bet);
-
-        if (this.stack >= chipsToAddTobet) {
-            return true;
-        }
-        return false;
+        return validTurn;
     },
     stillInTheRunning: function () {
         return this.status !== 'busted' && this.status !== 'waiting' && this.last_action !== 'fold';
@@ -915,39 +948,10 @@ function BroadcastYourTurn() {
     });
 
     if (client_to_send_your_turn) {
-        let options = [];
-
-        if (gameState.largest_current_bet !== 0) {
-            options.push({
-                'action': 'fold'
-            });
-        }
-
-        if (gameState.largest_current_bet === 0) {
-            options.push({
-                'action': 'check'
-            });
-        }
-
-        if (gameState.largest_current_bet > 0) {
-            options.push({
-                'action': 'call',
-                'value': (gameState.largest_current_bet > player_to_send_your_turn.stack ? player_to_send_your_turn.stack : gameState.largest_current_bet)
-            });
-        }
-
-        if (gameState.largest_current_bet + gameState.minimum_raise <= player_to_send_your_turn.stack) {
-            options.push({
-                'action': 'raise',
-                'minimum': (gameState.largest_current_bet + gameState.minimum_raise),
-                'maximum': player_to_send_your_turn.stack
-            });
-        }
-
         let message = JSON.stringify({
             'action': 'your_turn',
             'attempt': attempt,
-            'options': options
+            'options': GetPossibleOptionsForYourTurn(player_to_send_your_turn)
 
         });
         client_to_send_your_turn.connection.sendUTF(message);
@@ -971,6 +975,35 @@ function BroadcastYourTurn() {
         });
         NextPersonOrEnd();
     }
+}
+
+function GetPossibleOptionsForYourTurn(player) {
+    let options = [];
+
+    if (gameState.largest_current_bet > 0 && gameState.largest_current_bet !== player.bet) {
+        options.push({
+            'action': 'fold'
+        });
+        options.push({
+            'action': 'call',
+            'value': (gameState.largest_current_bet > player.stack ? player.stack : gameState.largest_current_bet)
+        });
+    }
+
+    if (gameState.largest_current_bet === 0 || gameState.largest_current_bet === player.bet) {
+        options.push({
+            'action': 'check'
+        });
+    }
+
+    if (gameState.largest_current_bet + gameState.minimum_raise <= player.stack) {
+        options.push({
+            'action': 'raise',
+            'minimum': (gameState.largest_current_bet + gameState.minimum_raise),
+            'maximum': player.stack
+        });
+    }
+    return options;
 }
 
 function BroadcastScoreBoard() {
