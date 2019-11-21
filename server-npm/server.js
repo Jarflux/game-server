@@ -343,9 +343,16 @@ wsServer.on('request', function (request) {
                         clearTimeout(ACTION_TIMEOUT_FUNCTION);
 
                         if (player.attempt <= 3 && player.isValidTurn(gameState.largest_current_bet, 'call')) {
-                            player.setBet(gameState.largest_current_bet);
-                            writeToChat("Attempt " + player.attempt + ": " +  player.name + " calls " + player.bet + ", keeping " + player.stack);
-                            player.last_action = 'call';
+
+                            if(gameState.largest_current_bet > (player.stack + player.bet)){
+                                player.setBet(gameState.largest_current_bet);
+                                writeToChat("Attempt " + player.attempt + ": " +  player.name + " call all-in " + player.bet + ", keeping " + player.stack);
+                                player.last_action = 'all-in';
+                            } else {
+                                player.setBet(gameState.largest_current_bet);
+                                writeToChat("Attempt " + player.attempt + ": " +  player.name + " calls " + player.bet + ", keeping " + player.stack);
+                                player.last_action = 'call';
+                            }
 
                             client.connection.sendUTF(JSON.stringify({
                                 'action': 'success',
@@ -408,12 +415,18 @@ wsServer.on('request', function (request) {
                             }
                         } else {
                             if (player.attempt <= 3 && player.isValidTurn(message.data, message.action)) {
-                                player.setBet(message.data);
-                                player.last_action = 'raise';
+
+                                if(message.data > player.stack){
+                                    player.setBet(message.data);
+                                    writeToChat("Attempt " + player.attempt + ": " +  player.name + "raise all-in " + player.bet + ", keeping " + player.stack);
+                                    player.last_action = 'all-in';
+                                }else{
+                                    player.setBet(message.data);
+                                    writeToChat("Attempt " + player.attempt + ": " +  player.name + " raises " + player.bet + ", keeping " + player.stack);
+                                    player.last_action = 'raise';
+                                }
+
                                 gameState.pots[0].eligible_players = [player.id];
-
-                                writeToChat("Attempt " + player.attempt + ": " +  player.name + " raises " + player.bet + ", keeping " + player.stack);
-
                                 client.connection.sendUTF(JSON.stringify({
                                     'action': 'success',
                                     'data': 'action-accepted'
@@ -705,7 +718,7 @@ Player.prototype = {
     addHoleCards: function (hand) {
         this.hole_cards.push(hand);
     },
-    setBet: function (bet) { //TODO-if player bets 200 and only has 50 chips, bet for 50 chips
+    setBet: function (bet) {
         let allIn = false;
         let chipsToAddTobet = bet - this.bet;
         if (chipsToAddTobet > this.stack) {
@@ -713,7 +726,12 @@ Player.prototype = {
             allIn = true;
         }
 
-        if (this.stack >= chipsToAddTobet && bet > 0) {
+        if(allIn){
+            this.bet = this.stack;
+            this.stack = 0;
+        }
+
+        if (this.stack >= chipsToAddTobet && bet > 0 && !allIn) {
             this.bet = bet;
             this.stack = this.stack - chipsToAddTobet;
         }
@@ -722,6 +740,7 @@ Player.prototype = {
         if (gameState.pots[0].eligible_players.indexOf(this.id) === -1) {
             gameState.pots[0].eligible_players.push(this.id);
         }
+
         if (!allIn) {
             gameState.largest_current_bet = bet;
         }
