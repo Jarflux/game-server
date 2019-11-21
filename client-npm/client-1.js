@@ -52,6 +52,7 @@ client1.on('connect', function(connection) {
                     console.log("My turn", message);
 
                     let random = Math.round(Math.random() * 100);
+                    //random = 14;
 
                     if (random < 10) {
                         //Return with a call, no matter what the input is

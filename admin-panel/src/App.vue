@@ -20,6 +20,8 @@
       <div v-if="gamestate.game_started" class="big-blind" >Big blind: {{ gamestate.big_blind }}</div>
       <div v-if="gamestate.game_started" class="minimal-bet" >Minimal bet: {{ gamestate.minimum_raise }}</div>
 
+      <hr/>
+
       <button v-on:click="startGame" v-if="connection.joined && !gamestate.game_started && gamestate.players.length > 1">
         Start game
       </button>
@@ -88,10 +90,10 @@
 
         <div class="chat" v-if="gamestate.chat.length > 0">
           <h3>Chat</h3>
-          <div class="chatline" v-for="msg in gamestate.chat.slice(0, 15)">{{ msg.timestamp | formatDate}}: {{ msg.msg }}</div>
+          <div class="chatline" v-for="msg in gamestate.chat.slice(0, 20)">{{ msg.timestamp | formatDate}}: {{ msg.msg }}</div>
         </div>
 
-        <div class="ranking" v-if="gamestate.ranking.length > 0">
+        <!--div class="ranking" v-if="gamestate.ranking.length > 0">
           <h3>Ranking</h3>
           <ol class="ranking-list">
             <li v-for="rank in gamestate.ranking">
@@ -103,11 +105,10 @@
           </ol>
 
           <hr/>
-        </div>
+        </div--->
 
-        <div>
+        <div v-if="scoreBoard.list.length > 0">
           <h3>Score Board</h3>
-          <div v-if="scoreBoard.list.length == 0">No scores yet ...</div>
 
           <div class="score-board-list">
             <div v-for="score in scoreBoard.list">
@@ -153,7 +154,7 @@
   let adminConfig = {
     autoRound: false,
     autoGame: false
-  }
+  };
 
   Vue.use(VueNativeSock, 'ws://localhost:8081', {
     protocol: 'echo-protocol',

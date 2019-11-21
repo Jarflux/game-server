@@ -6,7 +6,7 @@ const {rankBoard, rankDescription} = require('phe');
 
 const SLOW_DOWN = 1000;
 const TIME_TO_WAIT_FOR_RESPONSE = 10000;
-const STARTING_CHIP_STACK = 50;
+const STARTING_CHIP_STACK = 400;
 const ENABLE_SERVER_LOGS = true;
 
 let AUTO_ROUND = true;
@@ -294,12 +294,12 @@ wsServer.on('request', function (request) {
 
                         if (player.attempt <= 3 && player.isValidBet(gameState.largest_current_bet)) {
                             if (gameState.largest_current_bet === 0 || gameState.largest_current_bet === player.bet) {
-                                writeToChat(player.name + " checks " + 'in attempt ' + player.attempt);
                                 player.setBet(gameState.largest_current_bet);
+                                writeToChat("Attempt " + player.attempt + ": " +  player.name + " checks " + player.bet + ", keeping " + player.stack);
                                 player.last_action = 'check';
                             } else {
-                                writeToChat(player.name + " calls " + gameState.largest_current_bet + ' in attempt ' + player.attempt);
                                 player.setBet(gameState.largest_current_bet);
+                                writeToChat("Attempt " + player.attempt + ": " +  player.name + " calls " + player.bet + ", keeping " + player.stack);
                                 player.last_action = 'call';
                             }
 
@@ -341,7 +341,7 @@ wsServer.on('request', function (request) {
                                 player.setBet(message.data);
                                 player.last_action = 'call';
 
-                                writeToChat(player.name + " calls " + gameState.largest_current_bet + ' in attempt ' + player.attempt);
+                                writeToChat("Attempt " + player.attempt + ": " +  player.name + " calls " + player.bet + ", keeping " + player.stack);
 
                                 client.connection.sendUTF(JSON.stringify({
                                     'action': 'success',
@@ -368,7 +368,7 @@ wsServer.on('request', function (request) {
                                 player.last_action = 'raise';
                                 gameState.pots[0].eligible_players = [player.id];
 
-                                writeToChat(player.name + " raises " + message.data + ' in attempt ' + player.attempt);
+                                writeToChat("Attempt " + player.attempt + ": " +  player.name + " raises " + player.bet + ", keeping " + player.stack);
 
                                 client.connection.sendUTF(JSON.stringify({
                                     'action': 'success',
@@ -544,7 +544,7 @@ function ProvideBoardCards(count) {
 
 function StartNewHand() {
     gameState.hand++;
-    writeToChat("Starting new hand (hand: " + gameState.hand + ")");
+    writeToChat(" -----> STARTING NEW HAND (hand: " + gameState.hand + ")");
     NewDeck();
     console.log("Cards", Cards);
 
@@ -573,6 +573,7 @@ function StartNewHand() {
         gameState.small_blind = gameState.small_blind * 2;
         gameState.big_blind = gameState.big_blind * 2;
         gameState.minimum_raise = gameState.big_blind;
+        writeToChat("The small blind & big blind is doubled. Minimal raise is now " + gameState.minimum_raise);
     }
 
     gameState.hand_started = true;
@@ -674,6 +675,8 @@ Player.prototype = {
             this.stack = this.stack - chipsToAddTobet;
         }
 
+
+
         gameState.pots[0].size = gameState.pots[0].size + chipsToAddTobet;
         if (gameState.pots[0].eligible_players.indexOf(this.id) === -1) {
             gameState.pots[0].eligible_players.push(this.id);
@@ -687,13 +690,17 @@ Player.prototype = {
         if (typeof bet === 'undefined') {
             return false;
         }
-        if (this.stack === 0) {
+        if (this.stack === 0) { //TODO: this can be valid
             return false;
         }
 
         let chipsToAddTobet = bet - this.bet;
         if (chipsToAddTobet > this.stack) {
             chipsToAddTobet = this.stack;
+        }
+
+        if (gameState.minimum_raise > chipsToAddTobet) {
+           // return false;
         }
 
         //console.log("Valid bet?", chipsToAddTobet, this.stack, bet, this.bet);
@@ -773,9 +780,19 @@ function ActivateGame() {
         //gameState.largest_current_bet = firstPlayerToBet.bet;
     } else {
         let dealer = GetDealer();
-        let firstPlayerToBet = GetNextActivePlayer(dealer, "for dealer"); //TODO; only one left
-        gameState.in_action = firstPlayerToBet.id;
-        console.log("First player is", firstPlayerToBet.name)
+        let firstPlayerToBet = GetNextActivePlayer(dealer, "for dealer");
+        if (typeof firstPlayerToBet === 'undefined' ||  dealer.id === firstPlayerToBet.id) {
+            //the dealer is the only one left
+            gameState.end_of_hand = true;
+            BroadcastGameState();
+            if (AUTO_GAME) {
+                EndHand();
+            }
+        } else {
+            gameState.in_action = firstPlayerToBet.id;
+            console.log("First player is", firstPlayerToBet.name);
+        }
+
     }
 }
 
@@ -882,10 +899,14 @@ function BroadcastYourTurn() {
     });
 
     if (client_to_send_your_turn) {
+        let options = {
+        };
+
         let message = JSON.stringify({
             'action': 'your_turn',
             'attempt': attempt,
-            'minimum': gameState.minimum_raise,
+            'options': options,
+            'minimum': (gameState.largest_current_bet === 0 ? gameState.minimum_raise : gameState.largest_current_bet),
             'maximum': player_to_send_your_turn.stack
         });
         client_to_send_your_turn.connection.sendUTF(message);
@@ -971,6 +992,14 @@ function OnlyOnePlayerLeft() {
     });
 
     return playersLeft.length === 1;
+}
+
+function PlayersLeftCount() {
+    let playersLeft = Players.filter(function (player) {
+        return player.stillInTheRunning();
+    });
+
+    return playersLeft.length;
 }
 
 function OnlyOnePlayerLeftWithCredits() {
@@ -1066,11 +1095,26 @@ function GetNextPlayer(player) {
 
 function GetNextActivePlayer(player, from) {
     console.log("from", from);
+
+    let count = PlayersLeftCount();
+    if (count === 0) {
+        return undefined;
+    }
+
+    let nextPlayer = GetNextPlayer(player);
+    if (nextPlayer.stillInTheRunning()) {
+        return nextPlayer;
+    }
+    return GetNextActivePlayer(nextPlayer, from);
+}
+
+function GetNextActivePlayerWithStack(player, from) {
+    console.log("from", from);
     let nextPlayer = GetNextPlayer(player);
     if (nextPlayer.stillInTheRunning() && nextPlayer.stack !== 0) {
         return nextPlayer;
     }
-    return GetNextActivePlayer(nextPlayer, from);
+    return GetNextActivePlayerWithStack(nextPlayer, from);
 }
 
 function GetDealer() {
@@ -1148,7 +1192,7 @@ function CalculateRanking() {
         });
     } else {
         Players.forEach(function (player) {
-            if (player.last_action !== 'fold' && player.status !== 'waiting') {
+            if (player.last_action !== 'fold' && player.status !== 'waiting' && player.status !== 'busted') {
                 let cards = player.hole_cards.join(' ') + ' ' + flop;
                 const rank = rankBoard(cards);
                 const description = rankDescription[rank];
