@@ -70,7 +70,7 @@
           </div>
         </div>
 
-        <div v-if="gamestate.game_started" class="pot" v-for="pot in gamestate.pots">Pot: {{ pot.size }}, Players: {{
+        <div class="pot" v-for="pot in gamestate.pots">Pot: {{ pot.size }}, Players: {{
           pot.eligible_players }}
         </div>
 

@@ -584,7 +584,8 @@ function StartNewHand() {
         gameState.small_blind = gameState.small_blind * 2;
         gameState.big_blind = gameState.big_blind * 2;
         gameState.minimum_raise = gameState.big_blind;
-        writeToChat("The small blind & big blind is doubled. Minimal raise is now " + gameState.minimum_raise);
+        writeToChat("The small blind & big blind is doubled.");
+        writeToChat("Minimal raise is now " + gameState.minimum_raise);
     }
 
     gameState.hand_started = true;
@@ -720,10 +721,10 @@ Player.prototype = {
         return false;
     },
     stillInTheRunning: function () {
-        return this.status === 'active' && this.last_action !== 'fold';
+        return this.status !== 'busted' && this.status !== 'waiting' && this.last_action !== 'fold';
     },
     stillHasCredits: function () {
-        return this.stack > 0;
+        return this.stack > 0 && this.status === 'active';
     },
 };
 
@@ -1021,6 +1022,14 @@ function OnlyOnePlayerLeftWithCredits() {
     return playersLeftWithCredits.length === 1;
 }
 
+function GetLastPlayerLeftWithCredits() {
+    let playersLeftWithCredits = Players.filter(function (player) {
+        return player.stillHasCredits();
+    });
+
+    return playersLeftWithCredits[0];
+}
+
 function EndOfBettingRound() {
     gameState.in_action = -1;
 
@@ -1141,7 +1150,16 @@ function GetBigBlind() {
 }
 
 function NextPersonOrEnd() {
-    if (!DoesEveryoneHasEqualBets()) {
+    if (OnlyOnePlayerLeftWithCredits()) {
+        writeToChat("We have a winner!!!!");
+
+        let lastPlayer = GetLastPlayerLeftWithCredits();
+        AddPlayerToFinalRanking(lastPlayer);
+
+        gameState.game_started = false;
+        gameState.end_of_hand = true;
+        BroadcastGameState();
+    } else if (!DoesEveryoneHasEqualBets()) {
         MoveInActionToNextPlayer();
         setTimeout(function () {
             BroadcastGameState();
@@ -1194,7 +1212,7 @@ function CalculateRanking() {
         });
     } else {
         Players.forEach(function (player) {
-            if (player.last_action !== 'fold' && player.status !== 'waiting' && player.status !== 'busted') {
+            if (player.last_action !== 'fold' && player.status !== 'waiting' && player.status !== 'busted' && player.status !== 'inactive') {
                 let cards = player.hole_cards.join(' ') + ' ' + flop;
                 const rank = rankBoard(cards);
                 const description = rankDescription[rank];
@@ -1245,13 +1263,25 @@ function EndHand() {
 
     if (OnlyOnePlayerLeftWithCredits()) {
         writeToChat("We have a winner!!!!");
+
+        let lastPlayer = GetLastPlayerLeftWithCredits();
+        AddPlayerToFinalRanking(lastPlayer);
+
         gameState.game_started = false;
+        gameState.end_of_hand = true;
         BroadcastGameState();
     } else {
         if (AUTO_GAME && PlayersLeftCount() !== 0) {
             StartNewHand();
         }
     }
+}
+
+function AddPlayerToFinalRanking(player) {
+    gameState.final_ranking = [{
+        id: player.id,
+        name: player.name
+    }, ...gameState.final_ranking];
 }
 
 function DividePots() {
@@ -1348,10 +1378,7 @@ function RemovePlayersWithoutChips() {  // Bust all players without chips
         if (player.stack === 0 && player.status !== 'busted') {
             writeToChat(player.name + " has no chips remaining");
             player.status = 'busted';
-            gameState.final_ranking = [{
-                id: player.id,
-                name: player.name
-            }, ...gameState.final_ranking];
+            AddPlayerToFinalRanking(player);
         }
     });
 }
