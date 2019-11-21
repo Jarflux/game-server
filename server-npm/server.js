@@ -238,7 +238,15 @@ wsServer.on('request', function (request) {
                         gameState.hand = 0;
                         gameState.minimum_raise = 20;
                         gameState.small_blind = 10;
-                        gameState.big_blind =20;
+                        gameState.big_blind = 20;
+
+                        gameState.largest_current_bet = 0;
+                        scoreBoard = [];
+
+                        gameState.pots = [{
+                            "size": 0,
+                            "eligible_players": []
+                        }];
 
                         EraseHoleCardsForAllPlayers();
                         gameState.board = [];
@@ -748,13 +756,6 @@ Player.prototype = {
             }
         });
 
-        console.log(action, options, validTurn);
-
-        /*let chipsToAddTobet = bet - this.bet;
-        if (chipsToAddTobet > this.stack) {
-            chipsToAddTobet = this.stack;
-        }*/
-
         return validTurn;
     },
     stillInTheRunning: function () {
@@ -1131,6 +1132,7 @@ function ShufflePlayers() {
 function SetStackForAllPlayers() {
     Players.forEach(function (player) {
         player.stack = STARTING_CHIP_STACK;
+        player.bet = 0;
     });
 }
 
@@ -1212,6 +1214,8 @@ function GetBigBlind() {
 }
 
 function NextPersonOrEnd() {
+    RemovePlayersWithoutChips();
+
     if (OnlyOnePlayerLeftWithCredits()) {
         writeToChat("We have a winner!!!!");
 
@@ -1313,7 +1317,7 @@ function EndHand() {
     gameState.in_action = -1;
     BroadcastGameState();
 
-    scoreBoard.push(gameState.ranking);
+    scoreBoard = [gameState.ranking, ...scoreBoard];
     BroadcastScoreBoard();
 
     //reset
