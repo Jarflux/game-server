@@ -238,7 +238,7 @@ wsServer.on('request', function (request) {
                         gameState.in_action = -1;
 
                         gameState.hand = 0;
-                        gameState.minimum_raise = 10;
+                        gameState.minimum_raise = 20;
                         gameState.small_blind = 10;
                         gameState.big_blind =20;
 
@@ -915,15 +915,40 @@ function BroadcastYourTurn() {
     });
 
     if (client_to_send_your_turn) {
-        let options = {
-        };
+        let options = [];
+
+        if (gameState.largest_current_bet !== 0) {
+            options.push({
+                'action': 'fold'
+            });
+        }
+
+        if (gameState.largest_current_bet === 0) {
+            options.push({
+                'action': 'check'
+            });
+        }
+
+        if (gameState.largest_current_bet > 0) {
+            options.push({
+                'action': 'call',
+                'value': (gameState.largest_current_bet > player_to_send_your_turn.stack ? player_to_send_your_turn.stack : gameState.largest_current_bet)
+            });
+        }
+
+        if (gameState.largest_current_bet + gameState.minimum_raise <= player_to_send_your_turn.stack) {
+            options.push({
+                'action': 'raise',
+                'minimum': (gameState.largest_current_bet + gameState.minimum_raise),
+                'maximum': player_to_send_your_turn.stack
+            });
+        }
 
         let message = JSON.stringify({
             'action': 'your_turn',
             'attempt': attempt,
-            'options': options,
-            'minimum': (gameState.largest_current_bet === 0 ? gameState.minimum_raise : gameState.largest_current_bet),
-            'maximum': player_to_send_your_turn.stack
+            'options': options
+
         });
         client_to_send_your_turn.connection.sendUTF(message);
 
@@ -1371,10 +1396,11 @@ function writeToChat(msg) {
     if (ENABLE_SERVER_LOGS) {
         console.log(msg);
     }
-    gameState.chat.push({
+
+    gameState.chat = [{
         timestamp: Date.now(),
         msg: msg
-    });
+    }, ...gameState.chat];
 }
 
 function RemovePlayersWithoutChips() {  // Bust all players without chips

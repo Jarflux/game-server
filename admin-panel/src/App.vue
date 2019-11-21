@@ -256,7 +256,7 @@
             gamestate.minimum_raise = newGameState.minimum_raise;
             gamestate.board = newGameState.board;
             gamestate.ranking = newGameState.ranking;
-            gamestate.chat = newGameState.chat.reverse();
+            gamestate.chat = newGameState.chat;
             gamestate.end_of_hand = newGameState.end_of_hand;
             gamestate.game_started = newGameState.game_started;
             gamestate.hand_started = newGameState.hand_started;
