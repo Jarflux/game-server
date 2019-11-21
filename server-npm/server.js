@@ -696,8 +696,12 @@ Player.prototype = {
         if (typeof bet === 'undefined') {
             return false;
         }
-        if (this.stack === 0) { //TODO: this can be valid
+        if (this.stack === 0) {
             return false;
+        }
+
+        if (gameState.board.length > 0 && bet === 0) {
+            return true;
         }
 
         let chipsToAddTobet = bet - this.bet;
@@ -705,8 +709,12 @@ Player.prototype = {
             chipsToAddTobet = this.stack;
         }
 
-        if (gameState.minimum_raise > chipsToAddTobet) {
-           // return false;
+        if (bet >= gameState.minimum_raise) {
+            return true;
+        } else if (bet < gameState.minimum_raise && chipsToAddTobet === this.stack) {
+            return true;
+        } else {
+            return false;
         }
 
         //console.log("Valid bet?", chipsToAddTobet, this.stack, bet, this.bet);
