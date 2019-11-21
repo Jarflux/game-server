@@ -4,7 +4,7 @@ var http = require('http');
 const crypto = require('crypto');
 const {rankBoard, rankDescription} = require('phe');
 
-const SLOW_DOWN = 1000;
+const SLOW_DOWN = 500;
 const TIME_TO_WAIT_FOR_RESPONSE = 10000;
 const STARTING_CHIP_STACK = 400;
 const ENABLE_SERVER_LOGS = true;
@@ -226,22 +226,33 @@ wsServer.on('request', function (request) {
                     //TODO: validate if this is an allowed action (towards the game state)
                     if (client.status === 'admin' && isValidAdminApiKey(message.api_key)) {
                         ShufflePlayers();
-                        IncreaseStackForAllPlayers();
+                        SetStackForAllPlayers();
+
+                        Players.forEach(function (player) {
+                            if (player.status === 'busted') {
+                                player.status = 'active';
+                            }
+                        });
 
                         gameState.game_id = GetNewGameId();
 
                         gameState.dealer = -1;
                         gameState.in_action = -1;
-                        //TODO reset other fields in the gamestate?
+
+                        gameState.hand = 0;
+                        gameState.minimum_raise = 10;
+                        gameState.small_blind = 10;
+                        gameState.big_blind =20;
 
                         EraseHoleCardsForAllPlayers();
                         gameState.board = [];
-
                         gameState.game_started = true;
 
-                        //TODO what if still bets are open when starting new game? give back the money?
+                        gameState.final_ranking = [];
 
                         BroadcastGameState();
+
+                        writeToChat("STARTED NEW GAME ------------------------------");
 
                         if (AUTO_GAME) {
                             StartNewHand();
@@ -591,8 +602,6 @@ function ProceedToNextRound() {
         gameState.end_of_hand = true;
         BroadcastGameState();
         if (AUTO_GAME) {
-            //TODO Michaël: check if other plays still have money
-            //TODO Otherwise broadcast winner
             EndHand();
         }
     } else if (gameState.board.length === 0) {
@@ -754,15 +763,17 @@ function AddOrReplacePlayer(playerToAdd) {
 }
 
 function MoveDealerToNextPlayer() {
-    gameState.dealer++;
-    if (gameState.dealer >= Players.length) {
+    let dealer = GetDealer();
+    if (typeof dealer === 'undefined') {
         gameState.dealer = 0;
+    } else {
+        let nextDealer = GetNextActivePlayer(dealer, "move to next dealer");
+        gameState.dealer = nextDealer.id;
     }
 }
 
 function ActivateGame() {
     if (gameState.board.length === 0) {
-        //let dealer = GetDealer();
         let smallBlind = GetSmallBlind();
         smallBlind.setBet(gameState.small_blind);
         smallBlind.last_action = "small_blind";
@@ -923,7 +934,7 @@ function BroadcastYourTurn() {
 
         }, TIME_TO_WAIT_FOR_RESPONSE);
     } else {
-        writeToChat("Player is disconnected, so folding! Suckers!");
+        writeToChat("Player not responding, so folding! Suckers!");
         player_to_send_your_turn.last_action = 'fold';
         gameState.pots[0].eligible_players = gameState.pots[0].eligible_players.filter(function (index) {
             return index !== player_to_send_your_turn.id;
@@ -1046,9 +1057,9 @@ function ShufflePlayers() {
     });
 }
 
-function IncreaseStackForAllPlayers() {
+function SetStackForAllPlayers() {
     Players.forEach(function (player) {
-        player.stack = player.stack + STARTING_CHIP_STACK;
+        player.stack = STARTING_CHIP_STACK;
     });
 }
 
@@ -1106,15 +1117,6 @@ function GetNextActivePlayer(player, from) {
         return nextPlayer;
     }
     return GetNextActivePlayer(nextPlayer, from);
-}
-
-function GetNextActivePlayerWithStack(player, from) {
-    console.log("from", from);
-    let nextPlayer = GetNextPlayer(player);
-    if (nextPlayer.stillInTheRunning() && nextPlayer.stack !== 0) {
-        return nextPlayer;
-    }
-    return GetNextActivePlayerWithStack(nextPlayer, from);
 }
 
 function GetDealer() {
@@ -1242,21 +1244,24 @@ function EndHand() {
     RemovePlayersWithoutChips();
 
     if (OnlyOnePlayerLeftWithCredits()) {
-        console.log("We have a winner!!!!");
-        //gameState. = false;
+        writeToChat("We have a winner!!!!");
+        gameState.game_started = false;
         BroadcastGameState();
     } else {
-        if (AUTO_GAME) {
-            //TODO Michaël only go to new hand if still players to play with
-            StartNewHand(); //TODO: only of still enough players, otherwise end_game
+        if (AUTO_GAME && PlayersLeftCount() !== 0) {
+            StartNewHand();
         }
     }
 }
 
 function DividePots() {
+    if (gameState.ranking.length === 0) {
+        return;
+    }
+
     gameState.pots.forEach(function (pot) {
         // get the best hand
-        let winningRank = gameState.ranking[0].rank;
+        let winningRank = gameState.ranking[0].rank; //TODO there is no ranking yet
 
         // Get all the rankings that match the hand for a split pot
         let winners = gameState.ranking.filter(function (player) {
@@ -1340,16 +1345,15 @@ function writeToChat(msg) {
 
 function RemovePlayersWithoutChips() {  // Bust all players without chips
     Players.forEach(function (player) {
-        if (player.stack === 0) {
+        if (player.stack === 0 && player.status !== 'busted') {
             writeToChat(player.name + " has no chips remaining");
             player.status = 'busted';
-            gameState.final_ranking.push(player);
+            gameState.final_ranking = [{
+                id: player.id,
+                name: player.name
+            }, ...gameState.final_ranking];
         }
     });
-
-    /*Players.filter(function (player) {
-        return player.stack !== 0;
-    });*/
 }
 
 

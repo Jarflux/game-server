@@ -42,9 +42,9 @@
 
     <div v-if="gamestate.game_id !== 'start' && connection.connected">
 
-      <h2>Game ID: {{ gamestate.game_id }}</h2>
+      <h2>Game ID: {{ gamestate.game_id }} (hand: {{ gamestate.hand }})</h2>
 
-      <div v-if="gamestate.game_started" class="larget-bet">Largest bet: {{ gamestate.largest_current_bet }}</div>
+      <div class="larget-bet">Largest bet: {{ gamestate.largest_current_bet }}</div>
 
       <div class="table container">
         <div v-if="gamestate.players.length <= 1">
@@ -57,7 +57,7 @@
             <div class="name">{{ player.name }} ({{player.id}}) <img class="dealer-button"
                                                                      src="./assets/dealer-button.png"
                                                                      v-if="player.id === gamestate.dealer"/></div>
-            <div v-if="gamestate.game_started" class="chips-stack">{{ player.stack }}</div>
+            <div class="chips-stack">Stack: {{ player.stack }}</div>
 
             <div :class="['hole-cards', `hole-cards--${player.status}`, `hole-cards--${player.last_action}`]">
               <div class="playing-card" v-for="card in player.hole_cards">
@@ -65,7 +65,7 @@
               </div>
             </div>
 
-            <div v-if="gamestate.game_started" class="bet">{{ player.bet }} - {{ player.last_action }}</div>
+            <div class="bet">{{ player.bet }} - {{ player.last_action }}</div>
 
           </div>
         </div>
@@ -116,6 +116,17 @@
                 <li v-for="rank in score">{{ rank.name }} - {{ rank.cards }} - {{ rank.description }} ({{ rank.rank }})</li>
               </ol>
             </div>
+          </div>
+
+        </div>
+
+        <div v-if="gamestate.final_ranking && gamestate.final_ranking.length > 0">
+          <h3>Final Ranking</h3>
+
+          <div class="score-board-list">
+            <ol>
+                <li v-for="item in gamestate.final_ranking">{{ item.name }}</li>
+            </ol>
           </div>
 
         </div>
@@ -249,6 +260,8 @@
             gamestate.end_of_hand = newGameState.end_of_hand;
             gamestate.game_started = newGameState.game_started;
             gamestate.hand_started = newGameState.hand_started;
+            gamestate.hand = newGameState.hand;
+            gamestate.final_ranking = newGameState.final_ranking;
             break;
           case "connected":
             console.log("Connected");
