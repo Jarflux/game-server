@@ -17,6 +17,7 @@ let gameState = require('./initial-game-state.json');
 let scoreBoard = [];
 
 //TODO-split new pot if someone did an allIn
+//TODO-better ranking (for Two Pair, but one pair is better)
 
 var server = http.createServer(function (request, response) {
     console.log((new Date()) + ' Received request for ' + request.url);
@@ -1224,7 +1225,8 @@ function NextPersonOrEnd() {
 
         gameState.game_started = false;
         gameState.end_of_hand = true;
-        BroadcastGameState();
+        ProceedToNextRound();
+        //BroadcastGameState();
     } else if (!DoesEveryoneHasEqualBets()) {
         MoveInActionToNextPlayer();
         setTimeout(function () {
