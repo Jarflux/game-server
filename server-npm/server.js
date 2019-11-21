@@ -17,6 +17,8 @@ let gameState = require('./initial-game-state.json');
 let scoreBoard = [];
 
 //TODO-split new pot if someone did an allIn
+//TODO-better ranking (for Two Pair, but one pair is better)
+//TODO-save gamestate in a file (to be able to restore)
 
 var server = http.createServer(function (request, response) {
     console.log((new Date()) + ' Received request for ' + request.url);
@@ -255,6 +257,7 @@ wsServer.on('request', function (request) {
                         gameState.final_ranking = [];
 
                         BroadcastGameState();
+                        BroadcastScoreBoard();
 
                         writeToChat("STARTED NEW GAME ------------------------------");
 
@@ -1236,14 +1239,10 @@ function NextPersonOrEnd() {
     RemovePlayersWithoutChips();
 
     if (OnlyOnePlayerLeftWithCredits()) {
-        writeToChat("We have a winner!!!!");
-
-        let lastPlayer = GetLastPlayerLeftWithCredits();
-        AddPlayerToFinalRanking(lastPlayer);
-
         gameState.game_started = false;
         gameState.end_of_hand = true;
-        BroadcastGameState();
+        EndHand();
+        //BroadcastGameState();
     } else if (!DoesEveryoneHasEqualBets()) {
         MoveInActionToNextPlayer();
         setTimeout(function () {

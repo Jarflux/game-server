@@ -59,7 +59,7 @@ client.on('connect', function(connection) {
                         connection.sendUTF(JSON.stringify({ action: option.action}));
                         console.log("Responded with:", option.action);
                     } else if (option.action === 'raise') {
-                        let raise = option.minimum
+                        let raise = option.minimum;
                         connection.sendUTF(JSON.stringify({ action: 'raise', data: raise}));
                         console.log("Responded with:", "RAISE " + raise);
                     }

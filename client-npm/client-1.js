@@ -68,6 +68,9 @@ client1.on('connect', function(connection) {
                         console.log("Responded with:", option.action);
                     } else if (option.action === 'raise') {
                         let raise = Math.floor(randomIntFromInterval(option.minimum, option.maximum) / 6);
+                        if (raise < option.minimum) {
+                            raise = option.minimum;
+                        }
                         connection.sendUTF(JSON.stringify({ action: 'raise', data: raise}));
                         console.log("Responded with:", "RAISE " + raise);
                     }
