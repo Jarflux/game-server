@@ -19,8 +19,6 @@ let scoreBoard = [];
 //TODO-validate if bet is matching with the minimal bet
 //TODO-if player bets 200 and only has 50 chips, bet for 50 chips
 //TODO-split new pot if someone did an allIn
-//TODO-if next player has 0 chips, skip player (don't fold)  (Done but not validated)
-//TODO-Fix infinite recursion in GetNextActivePlayer
 
 var server = http.createServer(function (request, response) {
     console.log((new Date()) + ' Received request for ' + request.url);
@@ -684,8 +682,6 @@ Player.prototype = {
             this.bet = bet;
             this.stack = this.stack - chipsToAddTobet;
         }
-
-
 
         gameState.pots[0].size = gameState.pots[0].size + chipsToAddTobet;
         if (gameState.pots[0].eligible_players.indexOf(this.id) === -1) {
