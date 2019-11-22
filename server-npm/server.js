@@ -838,12 +838,12 @@ function ActivateGame() {
         let smallBlind = GetSmallBlind();
         smallBlind.setBet(gameState.small_blind);
         smallBlind.last_action = "small_blind";
-        writeToChat(smallBlind.name + " posted small blind of " + gameState.small_blind);
+        writeToChat(smallBlind.name + " posted small blind of " + gameState.small_blind + ', keeping ' + smallBlind.stack);
 
         let bigBlind = GetBigBlind();
         bigBlind.setBet(gameState.big_blind);
         bigBlind.last_action = "big_blind";
-        writeToChat(bigBlind.name + " posted big blind of " + gameState.big_blind);
+        writeToChat(bigBlind.name + " posted big blind of " + gameState.big_blind + ', keeping ' + bigBlind.stack);
 
         let firstPlayerToBet = GetNextActivePlayer(bigBlind, "first player");
         gameState.in_action = firstPlayerToBet.id;
@@ -1119,8 +1119,6 @@ function EndOfBettingRound() {
     gameState.in_action = -1;
 
     console.log("End of betting round");
-
-    //RemovePlayersWithoutChips();
 }
 
 function RemovePlayer(playerToRemove) {
@@ -1236,13 +1234,17 @@ function GetBigBlind() {
 }
 
 function NextPersonOrEnd() {
-    RemovePlayersWithoutChips();
-
     if (OnlyOnePlayerLeftWithCredits()) {
-        gameState.game_started = false;
-        gameState.end_of_hand = true;
-        EndHand();
-        //BroadcastGameState();
+        setTimeout(function () {
+            gameState.game_started = false;
+            gameState.end_of_hand = true;
+            EndHand();
+        }, SLOW_DOWN);
+    } else if (OnlyOnePlayerLeft()) {
+        setTimeout(function () {
+            gameState.end_of_hand = true;
+            EndHand();
+        }, SLOW_DOWN);
     } else if (!DoesEveryoneHasEqualBets()) {
         MoveInActionToNextPlayer();
         setTimeout(function () {
@@ -1283,7 +1285,7 @@ function CalculateRanking() {
     let ranking = [];
     let flop = gameState.board.join(' ');
 
-    if (OnlyOnePlayerLeft()) {
+    if (OnlyOnePlayerLeft()) { //TODO all-ins should count
         let winner = Players.filter(function (player) {
             return player.stillInTheRunning();
         })[0];
