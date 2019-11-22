@@ -71,10 +71,10 @@ wsServer.on('upgrade', function (req, socket) {
 }*/
 
 wsServer.on('request', function (request) {
-    if (!originIsAllowed(request.origin)) {
+    if (!originIsAllowed(request.origin) || request.requestedProtocols[0] !== 'echo-protocol') {
         // Make sure we only accept requests from an allowed origin
         request.reject();
-        console.log((new Date()) + ' Connection from origin ' + request.origin + ' rejected.');
+        console.log((new Date()) + ' Connection from origin ' + request.origin + ' with protocol ' +  request.requestedProtocols[0] + ' rejected.' );
         return;
     }
     let connection = request.accept('echo-protocol', request.origin);
