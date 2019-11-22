@@ -1234,8 +1234,6 @@ function GetBigBlind() {
 }
 
 function NextPersonOrEnd() {
-    RemovePlayersWithoutChips();
-
     if (OnlyOnePlayerLeftWithCredits()) {
         setTimeout(function () {
             gameState.game_started = false;
@@ -1287,7 +1285,7 @@ function CalculateRanking() {
     let ranking = [];
     let flop = gameState.board.join(' ');
 
-    if (OnlyOnePlayerLeft()) {
+    if (OnlyOnePlayerLeft()) { //TODO all-ins should count
         let winner = Players.filter(function (player) {
             return player.stillInTheRunning();
         })[0];
