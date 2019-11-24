@@ -4,9 +4,9 @@ var http = require('http');
 const crypto = require('crypto');
 const {rankBoard, rankDescription} = require('phe');
 
-const SLOW_DOWN = 1000;
-const TIME_TO_WAIT_FOR_RESPONSE = 10000;
-const STARTING_CHIP_STACK = 400;
+const SLOW_DOWN = 800;
+const TIME_TO_WAIT_FOR_RESPONSE = 9000;
+const STARTING_CHIP_STACK = 600;
 const ENABLE_SERVER_LOGS = true;
 
 let AUTO_ROUND = true;
@@ -22,7 +22,12 @@ let scoreBoard = [];
 
 var server = http.createServer(function (request, response) {
     console.log((new Date()) + ' Received request for ' + request.url);
-    response.writeHead(404);
+
+    response.setHeader('Access-Control-Allow-Origin', 'localhost');
+    response.setHeader('Vary', 'Origin');
+    response.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type');
+
+    //response.writeHead(404);
     response.end();
 });
 server.listen(8081, function () {
@@ -92,7 +97,14 @@ wsServer.on('request', function (request) {
         if (data.type === 'utf8') {
             //console.log('Received Message: ' + data.utf8Data);
 
-            var message = JSON.parse(data.utf8Data);
+            var message = {action:'not-valid'};
+
+            try {
+                message = JSON.parse(data.utf8Data);
+            } catch(error) {
+                console.log("invalid json", data.utf8Data);
+            }
+
             ValidateTotalChipCount();
 
             switch (message.action) {
@@ -113,7 +125,8 @@ wsServer.on('request', function (request) {
 
                         client.connection.sendUTF(JSON.stringify({
                             'action': 'success',
-                            'data': 'joined'
+                            'data': 'joined',
+                            'secret': 'dopper'
                         }));
 
                         BroadcastGameState();
@@ -492,7 +505,7 @@ wsServer.on('request', function (request) {
         }
     });
     connection.on('close', function (reasonCode, description) {
-        console.log('Client disconnected: ', client.uuid, client.name);
+        writeToChat('Client disconnected: ', player.uuid, player.name);
 
         player.status = "inactive";
         RemoveClient(client);
@@ -506,13 +519,17 @@ wsServer.on('request', function (request) {
 // -----------------------------------------------------------
 
 let VALID_PLAYER_API_KEYS = [
-    'Y2}/RUVw5s?F+vq3qO(n8uXou&3_GL',
-    'YDs)giYcQ0O|J=bhg:Tkrru(T&6K9]',
-    'wjAv9bvZl)"IbB`1OI^%ZJa+SAXA%$',
-    'un$5l>81ff;K~ia.C#usMQuKw1_d-2{',
-    's3olopRDT?8L6Qq3#3g52}|6pgZ.s^',
-    '-KffA7u;~dC.J[r|3-ZPkf1fZXhY^Gs',
-    '[VpBeOptl_#hY`h3Jo,|?NCM8qYa9L'
+    'Y2}/RUVw5s?F+vq3qO(n8uXou&3_GL', //client 3
+    'YDs)giYcQ0O|J=bhg:Tkrru(T&6K9]', //client 1
+    'wjAv9bvZl)"IbB`1OI^%ZJa+SAXA%$', //client 2
+    'un$5l>81ff;K~ia.C#usMQuKw1_d-2{', //client 4
+
+    's3olopRDT?8L6Qq3#3g52}|6pgZ.s^', //Maiko + Mathieu
+    '-KffA7u;~dC.J[r|3-ZPkf1fZXhY^Gs', //Mario + Thijs
+    '[VpBeOptl_#hY`h3Jo,|?NCM8qYa9L', //Jan en Pieter-Jan
+    '8y-&<#EA0dWI!uULnG4(_/h.c487|y', //Bert + Tom
+    'Q^Fd;sHK3m<%T[f.E9#G.?L@B0i*z9' //Rafael & Jason
+
 ];
 
 let VALID_OBSERVER_API_KEYS = [
@@ -522,7 +539,13 @@ let VALID_OBSERVER_API_KEYS = [
     'un$5lhdgdfgg:Tkrru(T&6KsMQuKw1_d-2{',
     's3olopRDThg:Tkrru(T&6fdgfKpgZ.s^',
     '-KffA7hg:Tkrru(T&6K-ZPfdgfkf1fY^Gs',
-    '[VpBeOptl_#hg:Tkrru(Tdfgfg&6KYa9L'
+    '[VpBeOptl_#hg:Tkrru(Tdfgfg&6KYa9L',
+
+    's3olopRDT?8L6Qq3#3g52}|6pgZ.s^', //Maiko + Mathieu
+    '-KffA7u;~dC.J[r|3-ZPkf1fZXhY^Gs', //Mario + Thijs
+    '[VpBeOptl_#hY`h3Jo,|?NCM8qYa9L', //Jan en Pieter-Jan
+    '8y-&<#EA0dWI!uULnG4(_/h.c487|y', //Bert + Tom
+    'Q^Fd;sHK3m<%T[f.E9#G.?L@B0i*z9' //Rafael & Jason
 ];
 
 let VALID_ADMIN_API_KEY = 'R3a8FibuDreX"%G)kvn17>/}8;,#E1OoAAU{Dx?l(###XAm=4QL2lLTUlmj-{}A';
@@ -781,7 +804,11 @@ Player.prototype = {
         return validTurn;
     },
     stillInTheRunning: function () {
-        return this.status !== 'busted' && this.status !== 'waiting' && this.last_action !== 'fold';
+        let inTheRunning = this.status !== 'busted' && this.status !== 'waiting' && this.last_action !== 'fold';
+        if (inTheRunning && this.status === 'inactive' && this.stack === 0 && this.bet === 0) {
+            inTheRunning = false;
+        }
+        return inTheRunning;
     },
     stillHasCredits: function () {
         return this.stack > 0 && this.status === 'active';
@@ -795,8 +822,8 @@ function AddOrReplacePlayer(playerToAdd) {
     let addedPlayer = false;
     Players.forEach(function (player) {
         if (player.api_key === playerToAdd.api_key) {
-            writeToChat("Player rejoined the game");
-            playerToAdd.status = 'active';
+            writeToChat(player.name + " rejoined the game");
+            playerToAdd.status = ((player.stack === 0 && player.bet === 0) ? 'busted' : 'active');
             playerToAdd.id = player.id;
             playerToAdd.stack = player.stack;
             playerToAdd.bet = player.bet;
@@ -984,6 +1011,7 @@ function BroadcastYourTurn() {
 
             writeToChat("No response from this player, so folding! Suckers!");
             player_to_send_your_turn.last_action = 'fold';
+            player_to_send_your_turn.attempt = 1;
             gameState.pots[0].eligible_players = gameState.pots[0].eligible_players.filter(function (index) {
                 return index !== player_to_send_your_turn.id;
             });
@@ -993,6 +1021,7 @@ function BroadcastYourTurn() {
     } else {
         writeToChat("Player not responding, so folding! Suckers!");
         player_to_send_your_turn.last_action = 'fold';
+        player_to_send_your_turn.attempt = 1;
         gameState.pots[0].eligible_players = gameState.pots[0].eligible_players.filter(function (index) {
             return index !== player_to_send_your_turn.id;
         });
@@ -1020,6 +1049,12 @@ function GetPossibleOptionsForYourTurn(player) {
     }
 
     if (gameState.largest_current_bet + gameState.minimum_raise <= player.stack) {
+        options.push({
+            'action': 'raise',
+            'minimum': (gameState.largest_current_bet + gameState.minimum_raise),
+            'maximum': player.stack
+        });
+    } else if (gameState.largest_current_bet > player.stack) {
         options.push({
             'action': 'raise',
             'minimum': (gameState.largest_current_bet + gameState.minimum_raise),
@@ -1283,6 +1318,10 @@ function DoesEveryoneHasEqualBets() {
 
 function CalculateRanking() {
     let ranking = [];
+
+    if (gameState.board.length !== 5) {
+        ProvideBoardCards(5 - gameState.board.length);
+    }
     let flop = gameState.board.join(' ');
 
     if (OnlyOnePlayerLeft()) { //TODO all-ins should count

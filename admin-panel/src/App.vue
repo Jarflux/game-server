@@ -167,7 +167,7 @@
     autoGame: false
   };
 
-  Vue.use(VueNativeSock, 'ws://localhost:8081', {
+  Vue.use(VueNativeSock, 'ws://0fce6390.ngrok.io/', {
     protocol: 'echo-protocol',
     format: 'json',
 

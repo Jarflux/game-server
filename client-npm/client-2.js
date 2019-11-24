@@ -48,7 +48,9 @@ client.on('connect', function(connection) {
                 case 'your_turn':
                     console.log("My turn");
 
-                    message.options = shuffle(message.options);
+                    connection.sendUTF(JSON.stringify({ action: 'fold'}));
+
+                    /*message.options = shuffle(message.options);
                     let option = message.options[0];
                     if (option.action === 'fold') {
                         message.options = shuffle(message.options);
@@ -65,7 +67,7 @@ client.on('connect', function(connection) {
                         }
                         connection.sendUTF(JSON.stringify({ action: 'raise', data: raise}));
                         console.log("Responded with:", "RAISE " + raise);
-                    }
+                    }*/
 
                     break;
 
