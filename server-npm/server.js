@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+var port = process.argv[2];
 var WebSocketServer = require('websocket').server;
 var http = require('http');
 const crypto = require('crypto');
@@ -30,8 +31,8 @@ var server = http.createServer(function (request, response) {
     //response.writeHead(404);
     response.end();
 });
-server.listen(8081, function () {
-    console.log((new Date()) + ' Server is listening on port 8081');
+server.listen(port, function () {
+    console.log((new Date()) + ' Server is listening on port ' +  port);
 });
 
 let wsServer = new WebSocketServer({
